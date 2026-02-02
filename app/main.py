@@ -1,0 +1,62 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.routes import router
+from app.api.image_proxy import router as image_router
+from app.config import get_settings
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    settings = get_settings()
+    
+    app = FastAPI(
+        title="Grocery List Structuring Engine",
+        description="""
+        AI-powered engine that converts unstructured grocery input into clean, structured shopping lists.
+        
+        ## How it works
+        
+        1. **Parser Agent** (LLM) - Splits raw text into individual grocery items
+        2. **Normalizer Agent** (LLM) - Extracts structured data (product name, quantity, unit, modifiers)
+        3. **Autocomplete API** - Resolves products using the ONLY authoritative product database
+        4. **Confidence Scoring** - Applies deterministic guardrails and safe fallbacks
+        
+        ## Guarantees
+        
+        - SKU is ONLY present if returned by the Autocomplete API
+        - No hallucinated products
+        - All uncertainty is captured in the notes field
+        - Fail-safe behavior: prefers generic products over wrong products
+        """,
+        version=settings.app_version,
+    )
+    
+    # Configure CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure appropriately for production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Include routes
+    app.include_router(router, prefix="/api/v1", tags=["grocery-list"])
+    app.include_router(image_router, prefix="/api/v1", tags=["images"])
+    
+    # Health check endpoint
+    @app.get("/health", tags=["health"])
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy", "version": settings.app_version}
+    
+    return app
+
+
+# Create app instance
+app = create_app()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

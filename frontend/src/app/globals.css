@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-work-sans: "Work Sans", system-ui, sans-serif;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background-light dark:bg-background-dark text-text-main dark:text-white antialiased;
+    font-family: var(--font-work-sans);
+  }
+}
+
+@layer components {
+  .custom-checkbox {
+    @apply appearance-none w-6 h-6 border-2 border-gray-300 dark:border-gray-600 rounded-full outline-none cursor-pointer relative flex items-center justify-center transition-colors;
+  }
+
+  .custom-checkbox:checked {
+    @apply bg-gray-300 dark:bg-gray-600 border-gray-300 dark:border-gray-600;
+  }
+
+  .custom-checkbox:checked::after {
+    content: "✓";
+    @apply text-white text-sm font-bold;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 1.5rem);
+  }
+}
