@@ -893,6 +893,16 @@ GEMINI_API_KEY=AIzaSy...
 AUTOCOMPLETE_AUTH_TOKEN=adc3d49185744f4389a2183e694060b9
 AUTOCOMPLETE_LAT=44.8828
 AUTOCOMPLETE_LNG=-93.2007
+
+# Supabase (admin tracking)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_jwt
+SUPABASE_ANON_KEY=your_anon_jwt
+
+# Admin panel (only this email can log in)
+ADMIN_ALLOWED_EMAIL=your-admin@example.com
+ADMIN_PANEL_PASSWORD=your_secure_password
+TRACKING_ENABLED=true
 ```
 
 **Frontend (`frontend/.env.local`):**
@@ -915,4 +925,4 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
-**Built with ❤️ by BasketSavings**
+**Built with ❤️ by BasketSavings*

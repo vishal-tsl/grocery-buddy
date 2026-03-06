@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
-import { CategorySection } from "@/components/CategorySection";
+import { GroceryItem as GroceryItemComponent } from "@/components/GroceryItem";
 import { BottomToolbar } from "@/components/BottomToolbar";
 import { QuickAddSheet } from "@/components/QuickAddSheet";
-import { ItemSpecSheet } from "@/components/ItemSpecSheet";
 import { GroceryItem } from "@/types";
 
 // Mock data - in real app, this would come from API/state
@@ -20,8 +19,8 @@ const mockItems: GroceryItem[] = [
     notes: "",
     checked: false,
     category: "Fresh Produce",
-    image_url:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDYMqChevw-OLVxDSfw94biiYKa6rj4L7gblI8kJlOBG3-MkryCPacKiDT_TUqFT_Fc24yRAqVmY5Wh6CNsefweWkpgSO6bEU1uCNzumtd1pahn0LAl6UyevmyduUpy3dObe9beFhMlUWz44WghANA3S2vshLRCP3FtT36NtVk36n4LA-UgVzJle6e8pLVV0jXfcFULAOlSI0PEr41XOsMBBUXGQae-whBXQubro3Hi3XVXbtJY0S9OFADePVQLYtB8ccopmnQEnDiq",
+    image_url: "https://images.basketsavings.com/2024/7/5/10/7966c1a7-26ba-42b6-910f-4329049257a7",
+    match_source: "product",
   },
   {
     id: "2",
@@ -32,6 +31,7 @@ const mockItems: GroceryItem[] = [
     notes: "",
     checked: false,
     category: "Dairy & Eggs",
+    match_source: "keyword",
   },
   {
     id: "3",
@@ -42,8 +42,8 @@ const mockItems: GroceryItem[] = [
     notes: "",
     checked: true,
     category: "Dairy & Eggs",
-    image_url:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBKyVnIc1i8YCnpJVntzm3TLonx_mIW4IbG3H1PnVxmpaQRub-z0ExEn6M7gxUp1-KrmTOUfBjI5eo_-5c44_IwkSEMHsuE2Q00E41v_hRfXhzOEMbFD4g2-vfwsqJR4FkBflEm47OLgorFPQnJZHiGKbUoQTtm0eaB_pBkfXUSBnbUVneSL0KqUomd9OADlJB7C0ewBXsrIyvogUuq9sVNN6gIZY77DXodHC3FRl1pT5rN1fWN88FD2bSeOXT43mMJY57GfF4Lvk",
+    image_url: "2024/5/23/12/8918b100-c025-42fe-8148-a602ed633019",
+    match_source: "ai_text",
   },
   {
     id: "4",
@@ -84,20 +84,8 @@ const mockItems: GroceryItem[] = [
     notes: "",
     checked: false,
     category: "Paper Goods & Cleaning Supplies",
-    image_url:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDT16cOlTXEwCrvD5UV7t5alm2pn5d88JcnEjeSXMB6dA8QEsqP3wiiqGby7DObWG9D2lJT03wjOMJ_35jLHRWgM1yZJmAlKQF6mSMSaTXwcJTLHjXaglbGRq792L2MD4JveR2A_iLzmdG5HhCd6lbqxSYQGVf3Gw8m3eaej-nj_PqWnBH7-tXfsNXwrdVZ_rPxVVgebAyyiGpJB0VWUipLU4ElohJ9OdJaAZw5pVFPSBjsKGCprQMJdMaVRh2RyGHUiKTN_l0LHEng",
+    image_url: "https://images.basketsavings.com/2024/7/5/10/7966c1a7-26ba-42b6-910f-4329049257a7",
   },
-];
-
-// Category order for sorting
-const categoryOrder = [
-  "Fresh Produce",
-  "Dairy & Eggs",
-  "Meat & Seafood",
-  "Baking & Cooking Needs",
-  "Canned & Jarred Foods",
-  "Paper Goods & Cleaning Supplies",
-  "Other",
 ];
 
 export default function ListPage() {
@@ -107,36 +95,6 @@ export default function ListPage() {
   
   const [items, setItems] = useState<GroceryItem[]>(mockItems);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<GroceryItem | null>(null);
-  const [isItemSpecOpen, setIsItemSpecOpen] = useState(false);
-
-  // Group items by category
-  const itemsByCategory = useMemo(() => {
-    const grouped: Record<string, GroceryItem[]> = {};
-    
-    items.forEach((item) => {
-      const category = item.category || "Other";
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(item);
-    });
-
-    // Sort categories by predefined order
-    const sortedCategories = Object.keys(grouped).sort((a, b) => {
-      const indexA = categoryOrder.indexOf(a);
-      const indexB = categoryOrder.indexOf(b);
-      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-
-    return sortedCategories.map((category) => ({
-      category,
-      items: grouped[category],
-    }));
-  }, [items]);
 
   const handleToggleItem = (id: string) => {
     setItems((prev) =>
@@ -153,20 +111,6 @@ export default function ListPage() {
       category: item.category || "Other",  // API provides category, fallback to "Other"
     }));
     setItems((prev) => [...prev, ...itemsWithCategory]);
-  };
-
-  const handleSelectItem = (item: GroceryItem) => {
-    setSelectedItem(item);
-    setIsItemSpecOpen(true);
-  };
-
-  const handleUpdateItem = (updatedItem: GroceryItem) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === updatedItem.id ? updatedItem : item
-      )
-    );
-    setSelectedItem(updatedItem);
   };
 
   const completedCount = items.filter((item) => item.checked).length;
@@ -212,21 +156,18 @@ export default function ListPage() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content - plain list */}
       <main className="flex-1 overflow-y-auto no-scrollbar pb-32">
-        {itemsByCategory.map(({ category, items: categoryItems }, idx) => (
-          <div key={category}>
-            <CategorySection
-              category={category}
-              items={categoryItems}
-              onToggleItem={handleToggleItem}
-              onSelectItem={handleSelectItem}
+        <div className="flex flex-col">
+          {items.map((item) => (
+            <GroceryItemComponent
+              key={item.id}
+              item={item}
+              onToggle={handleToggleItem}
+              onSelect={() => {}}
             />
-            {idx < itemsByCategory.length - 1 && (
-              <div className="h-px bg-border-light dark:bg-border-dark mx-5 mt-2" />
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
 
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
@@ -264,16 +205,6 @@ export default function ListPage() {
         listName={listName}
       />
 
-      {/* Item Specification Sheet */}
-      <ItemSpecSheet
-        isOpen={isItemSpecOpen}
-        item={selectedItem}
-        onClose={() => {
-          setIsItemSpecOpen(false);
-          setSelectedItem(null);
-        }}
-        onUpdate={handleUpdateItem}
-      />
     </div>
   );
 }

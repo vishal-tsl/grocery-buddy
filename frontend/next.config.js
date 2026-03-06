@@ -2,18 +2,8 @@
 const nextConfig = {
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-      },
-      {
-        protocol: "https",
-        hostname: "images.basketsavings.com",
-      },
-      {
-        protocol: "https",
-        hostname: "images.openfoodfacts.org",
-      },
+      { protocol: "https", hostname: "img.basketsavings.com" },
+      { protocol: "https", hostname: "images.basketsavings.com" },
     ],
   },
 };

@@ -1,6 +1,6 @@
 import httpx
 from app.config import get_settings
-from app.models.schemas import AutocompleteProduct
+from app.models.schemas import AutocompleteProduct, SuggestionType
 
 
 class AutocompleteClient:
@@ -35,12 +35,13 @@ class AutocompleteClient:
         
         params = {
             "query": query.strip(),
-            "limit": str(self.settings.autocomplete_limit),
+            "limit": "20",
+            "latitude": str(self.settings.autocomplete_lat),
+            "longitude": str(self.settings.autocomplete_lng),
+            "excludeSubcategory": "false",
+            "excludeProductNames": "true",
             "includeProducts": "true",
-            "includeImages": str(self.settings.autocomplete_include_images).lower(),
-            "excludeSubcategory": str(self.settings.autocomplete_exclude_subcategory).lower(),
-            "exludeBrand": str(self.settings.autocomplete_exclude_brand).lower(),  # Note: API has typo "exlude"
-            "semanticEnabled": "true",
+            "includeImages": "true",
             "enrichKeyword": "true",
         }
         
@@ -116,6 +117,8 @@ class AutocompleteClient:
             sku = item.get("id") or item.get("sku") or item.get("productId")
             
             # For Keyword items without id, create a composite identifier
+            api_type_raw = (item.get("type") or "").strip()
+            is_keyword = api_type_raw.lower() in ("type", "keyword", "category")
             if not sku:
                 brand_id = item.get("brandId")
                 type_id = item.get("typeId")
@@ -125,25 +128,29 @@ class AutocompleteClient:
                     sku = f"type_{type_id}_{idx}"
                 else:
                     sku = f"item_{idx}"
-            
+                is_keyword = True  # No id usually means keyword/type suggestion
+
+            # Use exact name from API: prefer full product name, then typeName (keyword)
             name = item.get("name") or item.get("productName") or item.get("typeName") or ""
-            
             if not name:
                 continue
-            
-            # Extract category
+
+            suggestion_type = SuggestionType.KEYWORD if is_keyword else SuggestionType.PRODUCT
+
+            # Extract category (only from product category fields)
             category = item.get("category") or item.get("categoryName")
-            
-            # Handle nested category objects
             if isinstance(category, dict):
                 category = category.get("name") or category.get("categoryName")
-            
-            # Build full image URL if present
-            image_url = item.get("imageUrl")
-            if image_url and not image_url.startswith("http"):
-                # Prefix with base URL for basketsavings images
+
+            # Build full image URL if present (try multiple API key variants)
+            image_url = item.get("imageUrl") or item.get("image_url")
+            if not image_url and isinstance(item.get("image"), dict):
+                image_url = item["image"].get("url")
+            if image_url and isinstance(image_url, str) and not image_url.startswith("http"):
                 image_url = f"https://images.basketsavings.com/{image_url}"
-            
+            if not image_url or not isinstance(image_url, str):
+                image_url = None
+
             products.append(AutocompleteProduct(
                 sku=str(sku),
                 name=str(name),
@@ -152,7 +159,8 @@ class AutocompleteClient:
                 type_id=item.get("typeId"),
                 type_name=item.get("typeName"),
                 image_url=image_url,
-                size=item.get("size")
+                size=item.get("size"),
+                suggestion_type=suggestion_type,
             ))
         
         return products

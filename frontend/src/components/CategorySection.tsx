@@ -1,6 +1,6 @@
 "use client";
 
-import { GroceryItem as GroceryItemType, ProductOption } from "@/types";
+import { GroceryItem as GroceryItemType } from "@/types";
 import { GroceryItem } from "./GroceryItem";
 
 interface CategorySectionProps {
@@ -8,8 +8,6 @@ interface CategorySectionProps {
   items: GroceryItemType[];
   onToggleItem: (id: string) => void;
   onSelectItem: (item: GroceryItemType) => void;
-  onSpecifyItem?: (item: GroceryItemType) => void;
-  onSelectBrand?: (item: GroceryItemType, option: ProductOption) => void;
 }
 
 export function CategorySection({
@@ -17,8 +15,6 @@ export function CategorySection({
   items,
   onToggleItem,
   onSelectItem,
-  onSpecifyItem,
-  onSelectBrand,
 }: CategorySectionProps) {
   return (
     <section className="mt-4">
@@ -27,13 +23,11 @@ export function CategorySection({
       </h2>
       <div className="flex flex-col">
         {items.map((item) => (
-          <GroceryItem 
+          <GroceryItem
             key={item.id}
-            item={item} 
-            onToggle={onToggleItem} 
+            item={item}
+            onToggle={onToggleItem}
             onSelect={onSelectItem}
-            onSpecify={onSpecifyItem}
-            onSelectBrand={onSelectBrand}
           />
         ))}
       </div>

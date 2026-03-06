@@ -5,33 +5,17 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { BottomToolbar } from "@/components/BottomToolbar";
 import { QuickAddSheet } from "@/components/QuickAddSheet";
-import { ItemSpecSheet } from "@/components/ItemSpecSheet";
-import { BrandSelectSheet } from "@/components/BrandSelectSheet";
-import { CategorySection } from "@/components/CategorySection";
-import { GroceryItem, ProductOption } from "@/types";
+import { GroceryItem as GroceryItemComponent } from "@/components/GroceryItem";
+import { GroceryItem } from "@/types";
 
 export default function NewListPage() {
   const router = useRouter();
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(true); // Open by default
-  const [selectedItem, setSelectedItem] = useState<GroceryItem | null>(null);
-  const [isItemSpecOpen, setIsItemSpecOpen] = useState(false);
-  const [isBrandSelectOpen, setIsBrandSelectOpen] = useState(false);
-  const [brandSelectItem, setBrandSelectItem] = useState<GroceryItem | null>(null);
   const [listName] = useState(() => {
     const now = new Date();
     return `Groceries, ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
   });
-
-  // Group items by category
-  const itemsByCategory = items.reduce((acc, item) => {
-    const category = item.category || "Other";
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(item);
-    return acc;
-  }, {} as Record<string, GroceryItem[]>);
 
   const handleToggleItem = (id: string) => {
     setItems((prev) =>
@@ -48,43 +32,6 @@ export default function NewListPage() {
       category: item.category || "Other",  // API provides category, fallback to "Other"
     }));
     setItems((prev) => [...prev, ...itemsWithCategory]);
-  };
-
-  const handleSelectItem = (item: GroceryItem) => {
-    setSelectedItem(item);
-    setIsItemSpecOpen(true);
-  };
-
-  const handleUpdateItem = (updatedItem: GroceryItem) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === updatedItem.id ? updatedItem : item
-      )
-    );
-    setSelectedItem(updatedItem);
-  };
-
-  const handleSpecifyItem = (item: GroceryItem) => {
-    setBrandSelectItem(item);
-    setIsBrandSelectOpen(true);
-  };
-
-  const handleSelectBrand = (item: GroceryItem, option: ProductOption) => {
-    // Update the item with selected brand
-    const updatedItem: GroceryItem = {
-      ...item,
-      product_name: option.name,
-      sku: option.sku,
-      brand: option.brand,
-      image_url: option.image_url || item.image_url,
-      needs_specification: false, // No longer needs specification
-    };
-    
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? updatedItem : i))
-    );
-    setIsBrandSelectOpen(false);
-    setBrandSelectItem(null);
   };
 
   return (
@@ -127,18 +74,17 @@ export default function NewListPage() {
           </div>
         )}
 
-        {/* Show items grouped by category */}
-        {Object.entries(itemsByCategory).map(([category, categoryItems]) => (
-          <CategorySection
-            key={category}
-            category={category}
-            items={categoryItems}
-            onToggleItem={handleToggleItem}
-            onSelectItem={handleSelectItem}
-            onSpecifyItem={handleSpecifyItem}
-            onSelectBrand={handleSelectBrand}
-          />
-        ))}
+        {/* Plain list of items */}
+        <div className="flex flex-col">
+          {items.map((item) => (
+            <GroceryItemComponent
+              key={item.id}
+              item={item}
+              onToggle={handleToggleItem}
+              onSelect={() => {}}
+            />
+          ))}
+        </div>
       </main>
 
       {/* Bottom Toolbar */}
@@ -150,28 +96,6 @@ export default function NewListPage() {
         onClose={() => setIsQuickAddOpen(false)}
         onAddItems={handleAddItems}
         listName={listName}
-      />
-
-      {/* Item Specification Sheet */}
-      <ItemSpecSheet
-        isOpen={isItemSpecOpen}
-        item={selectedItem}
-        onClose={() => {
-          setIsItemSpecOpen(false);
-          setSelectedItem(null);
-        }}
-        onUpdate={handleUpdateItem}
-      />
-
-      {/* Brand Selection Sheet */}
-      <BrandSelectSheet
-        isOpen={isBrandSelectOpen}
-        item={brandSelectItem}
-        onClose={() => {
-          setIsBrandSelectOpen(false);
-          setBrandSelectItem(null);
-        }}
-        onSelectBrand={handleSelectBrand}
       />
     </div>
   );

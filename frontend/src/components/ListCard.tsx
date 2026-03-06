@@ -1,6 +1,7 @@
 "use client";
 
 import { GroceryList } from "@/types";
+import { urlImageProvider } from "@/lib/image";
 import Link from "next/link";
 
 interface ListCardProps {
@@ -46,17 +47,20 @@ export function ListCard({ list, isActive = false }: ListCardProps) {
         </div>
 
         <div className="flex gap-3 pt-1">
-          {list.items.slice(0, 3).map((item, idx) =>
-            item.image_url && item.image_url.startsWith("http") ? (
+          {list.items.slice(0, 3).map((item, idx) => {
+            const itemImageUrl = urlImageProvider(item.image_url, "s");
+
+            return itemImageUrl ? (
               <div
                 key={idx}
                 className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-800 bg-center bg-cover shadow-inner overflow-hidden"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={item.image_url}
+                  src={itemImageUrl}
                   alt={item.product_name}
                   className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               </div>
@@ -67,8 +71,8 @@ export function ListCard({ list, isActive = false }: ListCardProps) {
               >
                 {item.product_name.charAt(0).toUpperCase()}
               </div>
-            )
-          )}
+            );
+          })}
           {list.items.length > 3 && (
             <div className="w-16 h-16 rounded-xl bg-gray-50 dark:bg-gray-800/50 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 text-xs font-bold">
               +{list.items.length - 3}

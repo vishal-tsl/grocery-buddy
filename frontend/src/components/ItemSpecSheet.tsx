@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "./Icon";
-import { GroceryItem, ProductOption } from "@/types";
+import { GroceryItem } from "@/types";
+import { urlImageProvider } from "@/lib/image";
 
 interface ItemSpecSheetProps {
   isOpen: boolean;
@@ -20,21 +21,8 @@ export function ItemSpecSheet({
 }: ItemSpecSheetProps) {
   const [quantity, setQuantity] = useState<number>(item?.quantity || 1);
   const [notes, setNotes] = useState<string>(item?.notes || "");
-  const [selectedOption, setSelectedOption] = useState<ProductOption | null>(null);
 
   if (!item) return null;
-
-  const handleSelectOption = (option: ProductOption) => {
-    setSelectedOption(option);
-    onUpdate({
-      ...item,
-      product_name: option.name,
-      sku: option.sku,
-      brand: option.brand,
-      image_url: option.image_url || item.image_url,
-      needs_specification: false,
-    });
-  };
 
   const handleUpdateQuantity = (newQty: number) => {
     setQuantity(newQty);
@@ -51,7 +39,7 @@ export function ItemSpecSheet({
     });
   };
 
-  const hasOptions = item.options && item.options.length > 1;
+  const itemImageUrl = urlImageProvider(item.image_url, "m");
 
   return (
     <AnimatePresence>
@@ -82,13 +70,14 @@ export function ItemSpecSheet({
             {/* Header with Product Image */}
             <div className="flex items-start gap-4 px-6 pb-4 border-b border-gray-100 dark:border-gray-700">
               {/* Product Image */}
-              {item.image_url && item.image_url.startsWith("http") ? (
+              {itemImageUrl ? (
                 <div className="w-20 h-20 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 overflow-hidden flex-shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={item.image_url}
+                    src={itemImageUrl}
                     alt={item.product_name}
                     className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       // Hide broken image and show fallback
                       e.currentTarget.style.display = 'none';
@@ -160,50 +149,7 @@ export function ItemSpecSheet({
                     </button>
                   </div>
                 </button>
-                {item.needs_specification && (
-                  <span className="px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 text-sm font-medium text-amber-700 dark:text-amber-400">
-                    Specify
-                  </span>
-                )}
               </div>
-
-              {/* Product Options */}
-              {hasOptions && item.needs_specification && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-primary font-semibold">Which one?</p>
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <Icon name="close" size={18} />
-                    </button>
-                  </div>
-                  <div className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2">
-                    {item.options?.map((option) => (
-                      <button
-                        key={option.sku}
-                        onClick={() => handleSelectOption(option)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition whitespace-nowrap ${
-                          selectedOption?.sku === option.sku
-                            ? "border-primary bg-primary/10"
-                            : "border-gray-200 dark:border-gray-600 hover:border-primary/50"
-                        }`}
-                      >
-                        {option.image_url && option.image_url.startsWith("http") && (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={option.image_url}
-                            alt={option.name}
-                            className="w-8 h-8 rounded object-cover bg-gray-100"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                        )}
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {option.brand ? option.name : option.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Notes Input */}
               {notes !== "" && (

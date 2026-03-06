@@ -25,7 +25,17 @@ class Settings(BaseSettings):
     autocomplete_include_images: bool = True
     autocomplete_exclude_subcategory: bool = False
     autocomplete_exclude_brand: bool = False  # Include brands in suggestions for user to choose
-    
+
+    # Admin tracking (Supabase)
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_anon_key: str = ""
+    admin_allowed_email: str = ""
+    admin_panel_password: str = ""
+    ip_geo_provider_url: str = "https://ip-api.com/json/{ip}?fields=status,country,regionName,city"
+    tracking_enabled: bool = False
+    tracking_retention_days: int = 30
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -24,8 +24,7 @@ const mockLists: GroceryList[] = [
         notes: "",
         checked: false,
         category: "Fresh Produce",
-        image_url:
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuDYMqChevw-OLVxDSfw94biiYKa6rj4L7gblI8kJlOBG3-MkryCPacKiDT_TUqFT_Fc24yRAqVmY5Wh6CNsefweWkpgSO6bEU1uCNzumtd1pahn0LAl6UyevmyduUpy3dObe9beFhMlUWz44WghANA3S2vshLRCP3FtT36NtVk36n4LA-UgVzJle6e8pLVV0jXfcFULAOlSI0PEr41XOsMBBUXGQae-whBXQubro3Hi3XVXbtJY0S9OFADePVQLYtB8ccopmnQEnDiq",
+        image_url: "https://images.basketsavings.com/2024/7/5/10/7966c1a7-26ba-42b6-910f-4329049257a7",
       },
       {
         id: "2",
@@ -36,8 +35,7 @@ const mockLists: GroceryList[] = [
         notes: "",
         checked: false,
         category: "Dairy & Eggs",
-        image_url:
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuCQb9IVGciXeKq5z5Ci5Iu0UaUoxwxM0PeEEhuAluWSmvlOYxVujgBsf8W6RRqALB1yJ-yk9qHh5wbeOZDqzb_fSFFX-P6Ehe_rhddHH3iZkGjQzXV3ZW-dv7qmnPH6yRJfOHWjjs0n4lJQqS501VKQaTuKa0124pK8UeeKPKsuAGxqdL4O215EKNsh_nKTGv8Zroh2WU2likdt0I5U00yCaC_j1H8MQqF5z5QAV2j3WnIj45Fwq9ufZWSdRlOky-jZFNGeALJVqoon",
+        image_url: "2024/5/23/12/8918b100-c025-42fe-8148-a602ed633019",
       },
       {
         id: "3",
@@ -48,8 +46,7 @@ const mockLists: GroceryList[] = [
         notes: "",
         checked: false,
         category: "Fresh Produce",
-        image_url:
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuCvhjSBxX7FHc_L8utUBc_9xz2hbf0bRvCTbKZ8UldY666pz2K4M8JIfTPytQUyFY_0GVzAnQVaZmgNPrzxydL6eVziAEM9riwOsos2E7snLaCy7Q7cs2hzhl52bDtJfeabq2erJ1kKVHshMnoXWL6QK_vpe-a-IJDU3ZFCgy7cG4cRMwHjpIdX_xqIpM2M-qZ4h3fzXTcfyZ34EJeTgvS-sPsrbHg7tmUc4P0B66EF9Vw_sUcS3oH797LLK2w9AZ3I76zK2Q3baGW7",
+        image_url: null,
       },
     ],
   },

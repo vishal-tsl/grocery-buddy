@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "./Icon";
 import { GroceryItem, ProductOption } from "@/types";
+import { urlImageProvider } from "@/lib/image";
 
 interface BrandSelectSheetProps {
   isOpen: boolean;
@@ -80,7 +81,10 @@ export function BrandSelectSheet({
                   <p className="mt-2">No brands found</p>
                 </div>
               ) : (
-                filteredOptions.map((option, idx) => (
+                filteredOptions.map((option, idx) => {
+                  const optionImageUrl = urlImageProvider(option.image_url, "m");
+
+                  return (
                   <button
                     key={option.sku || idx}
                     onClick={() => handleSelect(option)}
@@ -88,19 +92,20 @@ export function BrandSelectSheet({
                   >
                     {/* Product Image */}
                     <div className="w-24 h-24 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                      {option.image_url ? (
+                      {optionImageUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
-                          src={option.image_url}
+                          src={optionImageUrl}
                           alt={option.name}
                           className="w-full h-full object-contain p-2"
+                          referrerPolicy="no-referrer"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                             e.currentTarget.nextElementSibling?.classList.remove('hidden');
                           }}
                         />
                       ) : null}
-                      <div className={option.image_url ? "hidden" : ""}>
+                      <div className={optionImageUrl ? "hidden" : ""}>
                         <Icon name="inventory_2" size={32} className="text-gray-300" />
                       </div>
                     </div>
@@ -113,7 +118,8 @@ export function BrandSelectSheet({
                     {/* Arrow */}
                     <Icon name="chevron_right" size={24} className="text-gray-400" />
                   </button>
-                ))
+                  );
+                })
               )}
             </div>
 

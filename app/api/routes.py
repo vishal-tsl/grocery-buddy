@@ -1,81 +1,45 @@
-from fastapi import APIRouter, HTTPException
-from app.models.schemas import ParseListRequest, ParseListResponse, StructuredItem, NormalizedItem
+import time
+from fastapi import APIRouter, Request
+from app.models.schemas import (
+    ParseListRequest, ParseListResponse, StructuredItem, NormalizedItem
+)
 from app.services.resolver import get_resolver
-from app.config import get_settings
-from google import genai
-import json
+from app.services.tracking import capture_event
+from app.agents.parser import get_parser_agent
+from app.agents.normalizer import get_normalizer_agent
 
 
 router = APIRouter()
 
 
-# Minimal prompt for fast LLM processing
-COMBINED_PROMPT = """Parse grocery items. Fix typos. Return JSON array.
-
-Format: [{"n":"product","q":null,"u":null,"m":[],"b":false}]
-- n: product name (lowercase, fix typos: "salt butter"→"salted butter")
-- q: quantity (number or null)
-- u: unit (oz/lb/gallon or null)
-- m: modifiers ["organic","2%","salted"]
-- b: true if brand mentioned (Kerrygold, Fairlife)
-
-Example: "butter, milk 2%" → [{"n":"butter","q":null,"u":null,"m":[],"b":false},{"n":"milk","q":null,"u":null,"m":["2%"],"b":false}]"""
-
-
 def parse_and_normalize(text: str) -> list[NormalizedItem]:
-    """Parse and normalize using LLM to fix typos and correct product names."""
-    settings = get_settings()
-    client = genai.Client(api_key=settings.gemini_api_key)
+    """Parse and normalize using the proper parser and normalizer agents."""
+    parser = get_parser_agent()
+    normalizer = get_normalizer_agent()
     
-    prompt = f"""{COMBINED_PROMPT}
+    # Step 1: Parse raw text into individual items
+    raw_items = parser.parse(text)
+    
+    if not raw_items:
+        return []
+    
+    # Step 2: Normalize each item using batch processing
+    normalized_items = normalizer.normalize_batch(raw_items)
+    
+    return normalized_items
 
-Now process this input:
 
-"{text}"
-
-Return ONLY the JSON array, no other text."""
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
-        )
-        response_text = response.text.strip()
-        
-        # Clean up response
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            response_text = "\n".join(lines[1:-1])
-        
-        data_list = json.loads(response_text)
-        
-        results = []
-        for data in data_list:
-            # Support both short keys (n,q,u,m,b) and full keys
-            name = data.get("n") or data.get("normalized_product_name", "")
-            results.append(NormalizedItem(
-                normalized_product_name=name,
-                quantity=data.get("q") or data.get("quantity"),
-                unit=data.get("u") or data.get("unit"),
-                modifiers=data.get("m") or data.get("modifiers", []),
-                notes="",
-                original_text=name,
-                has_brand=data.get("b") if "b" in data else data.get("has_brand", False)
-            ))
-        return results
-        
-    except Exception as e:
-        print(f"LLM parsing failed: {e}")
-        # Fallback: simple split without LLM correction
-        items = [s.strip() for s in text.replace("\n", ",").split(",") if s.strip()]
-        return [NormalizedItem(
-            normalized_product_name=item,
-            original_text=item
-        ) for item in items]
+def _client_ip(req: Request) -> str:
+    forwarded = req.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if req.client:
+        return req.client.host or ""
+    return ""
 
 
 @router.post("/parse-list", response_model=ParseListResponse)
-async def parse_list(request: ParseListRequest) -> ParseListResponse:
+async def parse_list(http_request: Request, request: ParseListRequest) -> ParseListResponse:
     """
     Parse raw grocery text into a structured shopping list.
     
@@ -85,37 +49,61 @@ async def parse_list(request: ParseListRequest) -> ParseListResponse:
     
     Returns a list of structured items conforming to the output contract.
     """
-    import time
-    start = time.time()
-    
-    if not request.text or not request.text.strip():
+    start = time.perf_counter()
+    raw_input = request.text or ""
+
+    if not raw_input.strip():
         return ParseListResponse(items=[])
-    
+
     try:
-        # Step 1: Parse and normalize with LLM (fixes typos)
-        t1 = time.time()
+        t1 = time.perf_counter()
         normalized_items = parse_and_normalize(request.text)
-        llm_time = time.time()-t1
-        
+        llm_time = time.perf_counter() - t1
+
         if not normalized_items:
-            return ParseListResponse(items=[])
-        
-        # Step 2: Resolve products (parallel API calls)
-        t2 = time.time()
+            response = ParseListResponse(items=[])
+            try:
+                await capture_event(
+                    client_ip=_client_ip(http_request),
+                    user_agent=http_request.headers.get("user-agent"),
+                    endpoint="/parse-list",
+                    raw_input=raw_input,
+                    output_json=[i.model_dump() for i in response.items],
+                    status="success",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                )
+            except Exception:
+                pass
+            return response
+
+        t2 = time.perf_counter()
         resolver = get_resolver()
         structured_items = await resolver.resolve_batch(normalized_items)
-        api_time = time.time()-t2
-        total_time = time.time()-start
-        
-        # Log timing to response headers (visible to client)
+        api_time = time.perf_counter() - t2
+        total_time = time.perf_counter() - start
+
         import logging
-        logging.warning(f"TIMING: LLM={llm_time:.1f}s, API={api_time:.1f}s, Total={total_time:.1f}s for {len(normalized_items)} items")
-        return ParseListResponse(items=structured_items)
-        
+        logging.warning(
+            "TIMING: LLM=%.1fs, API=%.1fs, Total=%.1fs for %s items",
+            llm_time, api_time, total_time, len(normalized_items),
+        )
+        response = ParseListResponse(items=structured_items)
+        try:
+            await capture_event(
+                client_ip=_client_ip(http_request),
+                user_agent=http_request.headers.get("user-agent"),
+                endpoint="/parse-list",
+                raw_input=raw_input,
+                output_json=[i.model_dump() for i in structured_items],
+                status="success",
+                latency_ms=total_time * 1000,
+            )
+        except Exception:
+            pass
+        return response
+
     except Exception as e:
         print(f"Error in parse_list: {e}")
-        
-        # Safe fallback
         fallback_items = []
         for item in request.text.replace("\n", ",").split(","):
             item = item.strip()
@@ -127,5 +115,22 @@ async def parse_list(request: ParseListRequest) -> ParseListResponse:
                     unit=None,
                     notes="Processing failed"
                 ))
-        
-        return ParseListResponse(items=fallback_items)
+        response = ParseListResponse(items=fallback_items)
+        try:
+            await capture_event(
+                client_ip=_client_ip(http_request),
+                user_agent=http_request.headers.get("user-agent"),
+                endpoint="/parse-list",
+                raw_input=raw_input,
+                output_json=[i.model_dump() for i in fallback_items],
+                status="error",
+                latency_ms=(time.perf_counter() - start) * 1000,
+            )
+        except Exception:
+            pass
+        return response
+
+
+# Recipe module temporarily disabled.
+# To re-enable, restore RecipeRequest/RecipeResponse imports,
+# the get_recipe_agent import, and the /recipe-to-list endpoint below.

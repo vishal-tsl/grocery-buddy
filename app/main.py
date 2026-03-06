@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.image_proxy import router as image_router
+from app.api.admin import router as admin_router
 from app.config import get_settings
 
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     # Include routes
     app.include_router(router, prefix="/api/v1", tags=["grocery-list"])
     app.include_router(image_router, prefix="/api/v1", tags=["images"])
+    app.include_router(admin_router, prefix="/api/v1", tags=["admin"])
     
     # Health check endpoint
     @app.get("/health", tags=["health"])

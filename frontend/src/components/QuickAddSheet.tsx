@@ -62,6 +62,13 @@ export function QuickAddSheet({
         size: item.size,
         needs_specification: item.needs_specification,
         options: item.options,
+        match_source: item.match_source,
+        match_reason: item.match_reason,
+        confidence: item.confidence,
+        selected_option_index: item.selected_option_index,
+        selected_suggestion_index: item.selected_suggestion_index,
+        total_suggestions: item.total_suggestions,
+        autocomplete_query: item.autocomplete_query,
       }));
 
       onAddItems(newItems);
@@ -79,6 +86,7 @@ export function QuickAddSheet({
         unit: null,
         notes: "",
         checked: false,
+        match_source: "ai_text",
       }));
       onAddItems(fallbackItems);
       setInputText("");
@@ -141,28 +149,6 @@ export function QuickAddSheet({
               </div>
             </div>
 
-            {/* Preview Items */}
-            {parsedItems.length > 0 && (
-              <div className="flex-1 overflow-y-auto no-scrollbar border-t border-gray-100 dark:border-gray-700">
-                <div className="px-6 py-3">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                    Preview ({parsedItems.length} items)
-                  </p>
-                </div>
-                {parsedItems.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center px-6 py-3 border-b border-gray-100 dark:border-gray-700"
-                  >
-                    <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 mr-4" />
-                    <span className="text-base text-gray-800 dark:text-gray-200">
-                      {item}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Action Buttons */}
             <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 safe-bottom">
               <button
@@ -178,7 +164,7 @@ export function QuickAddSheet({
                 ) : (
                   <>
                     <Icon name="add" size={20} />
-                    Add {parsedItems.length} Item{parsedItems.length !== 1 ? "s" : ""}
+                    Add Items
                   </>
                 )}
               </button>

@@ -4,83 +4,113 @@ from app.config import get_settings
 from app.models.schemas import NormalizedItem
 
 
-NORMALIZER_SYSTEM_PROMPT = """You are a grocery item normalizer. Your job is to extract structured data from a single grocery item string.
+NORMALIZER_SYSTEM_PROMPT = """You are a grocery item normalizer. Extract structured data from a single grocery item string.
 
-RULES:
-1. Extract the core product name (normalized, without quantity/unit)
-2. FIX TYPOS and AUTOCOMPLETE partial names to proper grocery terms:
-   - "salt butter" → "salted butter"
-   - "unsalt butter" → "unsalted butter"  
-   - "wht bread" → "white bread"
-   - "org milk" → "organic milk"
-   - "choc chip" → "chocolate chip cookies"
-   - "pb" → "peanut butter"
-   - "oj" → "orange juice"
-3. Extract quantity if explicitly stated (number only)
-4. Extract unit if explicitly stated (oz, lb, gallon, etc.)
-5. Extract modifiers (organic, 2%, low fat, whole wheat, salted, unsalted, etc.)
-6. Set has_brand to true ONLY if a specific brand name is mentioned (e.g., "Fairlife", "Kerrygold", "Horizon")
-7. Move ANY uncertainty or unclear text to notes
-8. NEVER guess brands or sizes - if not explicit, leave null
-9. NEVER invent information that isn't in the input
+CRITICAL RULES:
+1. PRESERVE BRAND NAMES - Include brand in product name when user specifies one
+2. PRESERVE FLAVOR/VARIETY - Include flavor/variety in product name
+3. Move SIZE/WEIGHT to notes (8oz, 2lb, gallon) - these help but aren't core product
+4. Extract quantity as NUMBER only (not units)
+5. has_brand = true when ANY brand name is present
 
-COMMON AUTOCOMPLETE MAPPINGS:
-- "salt/salted" as modifier for butter, nuts, crackers
-- "unsalt/unsalted" as modifier for butter, nuts
-- "wh/wht/white" → "white"
-- "ww/wheat" → "whole wheat"
-- "org" → "organic"
-- "ff" → "fat free"
-- "lf" → "low fat"
-- "rf" → "reduced fat"
+BRAND HANDLING (IMPORTANT):
+- has_brand = true ONLY if user explicitly named a brand (proper noun/company name)
+- Brand names are proper nouns like: Häagen-Dazs, Kerrygold, La Farmier, Doritos, Chobani, Fairlife, etc.
+- "Cool Ranch" is a FLAVOR of Doritos - Doritos is the brand
+- Generic words are NOT brands: shredded, organic, fresh, dijon, bella, red, etc.
+- When brand IS specified: normalized_product_name = "Brand Product Flavor/Variety"
+- When NO brand: normalized_product_name = just the product with modifiers
 
-UNCERTAINTY INDICATORS (move to notes):
-- "idk", "maybe", "or", "some", "I think", "?"
-- Vague descriptions without specific products
-- Multiple options mentioned
+Examples WITH brand:
+  - "Häagen-Dazs vanilla bean ice cream" → has_brand: true, name: "Häagen-Dazs vanilla bean ice cream"
+  - "Cool Ranch Doritos" → has_brand: true (Doritos is brand), name: "Cool Ranch Doritos"
+  - "Kerrygold butter" → has_brand: true, name: "Kerrygold butter"
+  - "La Farmier mango yogurt" → has_brand: true, name: "La Farmier mango yogurt"
+
+Examples WITHOUT brand:
+  - "eggs" → has_brand: false, name: "eggs"
+  - "shredded cheese" → has_brand: false (shredded is modifier, not brand)
+  - "red onion" → has_brand: false (red is variety, not brand)
+  - "Dijon mustard" → has_brand: false (Dijon is a style, not a brand)
+  - "portobello mushroom" → has_brand: false (portobello is variety)
+
+SIZE/WEIGHT → NOTES:
+- 8oz, 16oz, 1lb, 2lb, gallon, pint, etc. → move to notes
+- These are specifications, not core product identity
+
+MODIFIERS (when no brand):
+- organic, 2%, low fat, whole wheat, salted, unsalted, shredded, etc.
+
+TYPO FIXES:
+- "salt butter" → "salted butter", "unsalt" → "unsalted"
+- "wht/wh" → "white", "org" → "organic"
+- "pb" → "peanut butter", "oj" → "orange juice"
 
 OUTPUT FORMAT:
-Return a JSON object with these fields:
 {
-  "normalized_product_name": "string - the core product name (autocompleted/fixed)",
+  "normalized_product_name": "string - Brand + Product + Flavor if branded, OR just Product if generic",
   "quantity": number or null,
-  "unit": "string" or null,
-  "modifiers": ["array", "of", "modifiers"],
-  "notes": "string - any uncertainty or original unclear text",
-  "has_brand": boolean - true only if a specific brand was mentioned
+  "unit": null (move actual units like oz/lb to notes),
+  "modifiers": ["array - only for generic products without brand"],
+  "notes": "string - size specs (8oz), uncertainty, or alternatives",
+  "has_brand": true if ANY brand mentioned, false otherwise
 }
 
 EXAMPLES:
 
-Input: "salt butter"
-Output: {"normalized_product_name": "butter", "quantity": null, "unit": null, "modifiers": ["salted"], "notes": "", "has_brand": false}
+Input: "Häagen-Dazs vanilla bean ice cream"
+Output: {"normalized_product_name": "Häagen-Dazs vanilla bean ice cream", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
 
-Input: "kerrygold butter"
-Output: {"normalized_product_name": "butter", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
+Input: "Cool Ranch Doritos"
+Output: {"normalized_product_name": "Cool Ranch Doritos", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
 
-Input: "unsalt almonds"
-Output: {"normalized_product_name": "almonds", "quantity": null, "unit": null, "modifiers": ["unsalted"], "notes": "", "has_brand": false}
+Input: "Kerrygold butter"
+Output: {"normalized_product_name": "Kerrygold butter", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
+
+Input: "La Farmier yogurt mango flavor 2"
+Output: {"normalized_product_name": "La Farmier mango yogurt", "quantity": 2, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
+
+Input: "shredded cheese"
+Output: {"normalized_product_name": "cheese", "quantity": null, "unit": null, "modifiers": ["shredded"], "notes": "", "has_brand": false}
 
 Input: "tomato paste 8oz"
-Output: {"normalized_product_name": "tomato paste", "quantity": 8, "unit": "oz", "modifiers": [], "notes": "", "has_brand": false}
+Output: {"normalized_product_name": "tomato paste", "quantity": null, "unit": null, "modifiers": [], "notes": "8oz", "has_brand": false}
+
+Input: "chicken breast"
+Output: {"normalized_product_name": "chicken breast", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+
+Input: "bella mushroom portobello"
+Output: {"normalized_product_name": "portobello mushroom", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+
+Input: "red onion"
+Output: {"normalized_product_name": "red onion", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
 Input: "milk 2%"
 Output: {"normalized_product_name": "milk", "quantity": null, "unit": null, "modifiers": ["2%"], "notes": "", "has_brand": false}
 
-Input: "fairlife milk 2%"
-Output: {"normalized_product_name": "milk", "quantity": null, "unit": null, "modifiers": ["2%"], "notes": "", "has_brand": true}
+Input: "heavy cream"
+Output: {"normalized_product_name": "heavy cream", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
-Input: "organic whole wheat bread"
-Output: {"normalized_product_name": "bread", "quantity": null, "unit": null, "modifiers": ["organic", "whole wheat"], "notes": "", "has_brand": false}
+Input: "eggs"
+Output: {"normalized_product_name": "eggs", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
-Input: "idk some chips"
-Output: {"normalized_product_name": "chips", "quantity": null, "unit": null, "modifiers": [], "notes": "User unclear: 'idk some'", "has_brand": false}
+Input: "paper towels"
+Output: {"normalized_product_name": "paper towels", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
-Input: "wht bread"
-Output: {"normalized_product_name": "bread", "quantity": null, "unit": null, "modifiers": ["white"], "notes": "", "has_brand": false}
+Input: "Dijon mustard"
+Output: {"normalized_product_name": "Dijon mustard", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
-Input: "org eggs"
-Output: {"normalized_product_name": "eggs", "quantity": null, "unit": null, "modifiers": ["organic"], "notes": "", "has_brand": false}
+Input: "eggs"
+Output: {"normalized_product_name": "eggs", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+
+Input: "sour cream"
+Output: {"normalized_product_name": "sour cream", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+
+Input: "portobello mushroom"
+Output: {"normalized_product_name": "portobello mushroom", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+
+Input: "red onion"
+Output: {"normalized_product_name": "red onion", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 """
 
 
@@ -120,7 +150,8 @@ Return ONLY the JSON object, no other text."""
         try:
             response = self.client.models.generate_content(
                 model=self.model_id,
-                contents=prompt
+                contents=prompt,
+                config={"temperature": 0}  # Deterministic output
             )
             response_text = response.text.strip()
             
@@ -176,7 +207,8 @@ Return ONLY a JSON array like: [{{"normalized_product_name": "...", ...}}, ...]"
         try:
             response = self.client.models.generate_content(
                 model=self.model_id,
-                contents=prompt
+                contents=prompt,
+                config={"temperature": 0}  # Deterministic output
             )
             response_text = response.text.strip()
             

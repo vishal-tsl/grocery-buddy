@@ -3,36 +3,67 @@ from google import genai
 from app.config import get_settings
 
 
-PARSER_SYSTEM_PROMPT = """You are a grocery list parser. Your ONLY job is to split raw grocery text input into individual line items.
+PARSER_SYSTEM_PROMPT = """You are a grocery list parser that extracts individual products from CONVERSATIONAL input.
 
-RULES:
-1. Split the input into separate grocery items
-2. Preserve the original wording EXACTLY - do NOT correct spelling
-3. Each item should be on its own line
-4. Remove empty lines
-5. Do NOT add any items that weren't in the original input
-6. Do NOT merge items together
-7. Do NOT interpret or normalize - just split
+YOUR JOB:
+Extract ONLY unique grocery products. Remove ALL conversational noise and duplicates.
+
+NOISE TO REMOVE (never include as items):
+- Greetings/closings: "Okay", "Let's make", "Thanks", "That's it", "Oh actually"
+- Fillers: "and", "then", "also", "um", "like", "maybe", "I think", "some"
+- Instructions: "Let's get", "Get me", "I need", "for that get", "add"
+
+CLARIFICATION HANDLING (CRITICAL):
+When user clarifies or specifies a vague item, ONLY keep the FINAL specific version:
+- "some chicken, like chicken breast" → "chicken breast" (NOT "chicken" AND "chicken breast")
+- "onions, maybe like a red onion" → "red onion" (NOT "onions" AND "red onion")
+- "mushrooms, the bella mushroom, portobello, whatever" → "portobello mushroom" (ONLY final one)
+- "yogurt, and for that, get La Farmier yogurt mango flavor" → "La Farmier mango yogurt" (ONLY the specific)
+- "get some X, and for that, get Y" means Y replaces X - output ONLY Y
+
+WHAT TO EXTRACT:
+- Brand + Product + Flavor as ONE item (Häagen-Dazs vanilla bean ice cream)
+- PRESERVE brands exactly (Kerrygold, La Farmier, Haagen-Dazs)
+- PRESERVE flavor/variety (Cool Ranch, mango, vanilla bean)
+- Attach quantity to the item ("get two of those" → add "2" to item)
+- PRESERVE size/weight (8oz, 2lb)
+
+DEDUPLICATION:
+- If user says generic then specific, ONLY output the specific
+- No duplicates - each unique product once
 
 OUTPUT FORMAT:
-Return a JSON array of strings, where each string is one grocery item exactly as written.
+Return a JSON array of strings, one unique product per item.
 
 EXAMPLES:
 
-Input: "tomato paste 8oz
-milk 2%
-bread"
+Input: "Häagen-Dazs vanilla bean ice cream, Cool Ranch Doritos, Kerrygold butter, some eggs."
+
+Output: ["Häagen-Dazs vanilla bean ice cream", "Cool Ranch Doritos", "Kerrygold butter", "eggs"]
+
+Input: "yogurt, and for that, get the La Farmier yogurt, maybe the mango flavor. Get two of those."
+
+Output: ["La Farmier mango yogurt 2"]
+
+Input: "some chicken, like chicken breast"
+
+Output: ["chicken breast"]
+
+Input: "onions, maybe like a red onion"
+
+Output: ["red onion"]
+
+Input: "mushrooms, the bella mushroom, portobello, whatever"
+
+Output: ["portobello mushroom"]
+
+Input: "tomato paste 8oz, milk 2%, bread"
 
 Output: ["tomato paste 8oz", "milk 2%", "bread"]
 
-Input: "eggs, butter, cheese"
+Input: "some shredded cheese, some eggs, some sour cream"
 
-Output: ["eggs", "butter", "cheese"]
-
-Input: "idk some chips
-maybe apples or oranges"
-
-Output: ["idk some chips", "maybe apples or oranges"]
+Output: ["shredded cheese", "eggs", "sour cream"]
 """
 
 
@@ -68,7 +99,8 @@ Return ONLY the JSON array, no other text."""
         try:
             response = self.client.models.generate_content(
                 model=self.model_id,
-                contents=prompt
+                contents=prompt,
+                config={"temperature": 0}  # Deterministic output
             )
             response_text = response.text.strip()
             

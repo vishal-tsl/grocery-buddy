@@ -196,6 +196,34 @@ The frontend will be available at `http://localhost:3000`
 
 See `frontend/README.md` for detailed documentation.
 
+### Deploy to Vercel (full guide)
+
+**See [DEPLOYMENT.md](DEPLOYMENT.md) for a step-by-step guide** (backend first, then frontend, then connect them).
+
+### Deploy frontend to Vercel
+
+1. Push the repo to GitHub and import the project in [Vercel](https://vercel.com).
+2. Set **Root Directory** to `frontend` (so Vercel builds the Next.js app).
+3. Add environment variable:
+   - `NEXT_PUBLIC_API_URL` = your backend API URL (e.g. your Vercel backend URL or another host).
+4. Deploy.
+
+### Deploy backend (Python/FastAPI) to Vercel
+
+You can run the FastAPI backend on Vercel as serverless functions.
+
+1. In [Vercel](https://vercel.com), create a **second** project from the same repo (or use the same repo with a different root).
+2. Set **Root Directory** to the repo root (leave empty or `.`) so Vercel uses the Python app.
+3. Add environment variables in the project dashboard (same as local `.env`):
+   - `GEMINI_API_KEY`
+   - `AUTOCOMPLETE_AUTH_TOKEN`
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` (if using admin tracking)
+   - `ADMIN_ALLOWED_EMAIL`, `ADMIN_PANEL_PASSWORD`
+   - Optionally `AUTOCOMPLETE_LAT`, `AUTOCOMPLETE_LNG`, `TRACKING_ENABLED`
+4. Deploy. The API will be available at `https://<your-project>.vercel.app` (e.g. `/health`, `/api/v1/parse-list`, `/api/v1/recipe-to-list`).
+
+Then set the frontend’s `NEXT_PUBLIC_API_URL` to this backend URL so the app talks to the same deployment.
+
 ## V1 Scope
 
 **In Scope:**
