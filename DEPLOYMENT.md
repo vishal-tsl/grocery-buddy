@@ -21,7 +21,7 @@ You need **two Vercel projects**: one for the API (backend) and one for the app 
 5. **Configure the backend project**
    - **Project Name:** e.g. `slai-api` (you’ll get `https://slai-api.vercel.app`).
    - **Root Directory:** click **Edit**, leave it **empty** (repo root). Confirm.
-   - **Framework Preset:** Vercel should detect something like “Other” or “Python”; that’s fine.
+   - **Framework Preset:** set to **FastAPI** (required so Vercel runs `server.py` at the root).
    - Do **not** set Root Directory to `frontend`.
 
 6. **Environment variables**  
