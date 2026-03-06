@@ -1,10 +1,44 @@
-# Step-by-step: Deploy to Vercel
+# Step-by-step: Deploy to Vercel (and backend elsewhere)
 
-You need **two Vercel projects**: one for the API (backend) and one for the app (frontend). Deploy the backend first so you have its URL for the frontend.
+**Important:** The **frontend** works great on Vercel. The **backend** (FastAPI) often does **not** run correctly on Vercel: the build only installs dependencies and never creates a serverless function, so you get 404 and the browser shows "CORS error". **Use Railway or Render for the backend** (see below), then point the frontend at that URL.
 
 ---
 
-## Part 1: Deploy the backend (API)
+## Part 1: Deploy the backend (API) — use Railway (recommended)
+
+1. **Push your code to GitHub**  
+   Repo: e.g. `vishal-tsl/grocery-buddy`.
+
+2. **Go to [Railway](https://railway.app)**  
+   Sign in with GitHub.
+
+3. **New project**  
+   **New Project** → **Deploy from GitHub repo** → select `grocery-buddy`.
+
+4. **Configure the service**
+   - **Root Directory:** leave **empty** (repo root).
+   - **Build Command:** (leave default or) `pip install -r requirements.txt`
+   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`  
+     (Railway sets `PORT`; the repo also has a `Procfile` so this may be auto-detected.)
+   - **Environment variables:** Add the same as in your local `.env`:
+     - `GEMINI_API_KEY`, `AUTOCOMPLETE_AUTH_TOKEN`
+     - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
+     - `ADMIN_ALLOWED_EMAIL`, `ADMIN_PANEL_PASSWORD`, `TRACKING_ENABLED` (optional)
+
+5. **Deploy**  
+   Railway builds and runs the app. Open **Settings** → **Networking** → **Generate Domain**. You’ll get a URL like `https://grocery-buddy-production-xxxx.up.railway.app`.
+
+6. **Test the backend**  
+   Open `https://your-app.up.railway.app/health` in the browser. You should see `{"status":"healthy",...}`. Use this URL as the backend URL for the frontend.
+
+**Alternative: Render**  
+At [render.com](https://render.com): **New** → **Web Service** → connect repo, **Root Directory** empty, **Build Command** `pip install -r requirements.txt`, **Start Command** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Add env vars, then deploy and copy the service URL.
+
+---
+
+## Part 1 (Vercel backend — often broken): Deploy the backend on Vercel
+
+*Only try this if you specifically need the backend on Vercel. In many cases the build never creates a runnable function and you get 404/CORS.*
 
 1. **Push your code to GitHub**  
    Make sure this repo is on GitHub (e.g. `your-username/slai`).
@@ -85,9 +119,9 @@ You need **two Vercel projects**: one for the API (backend) and one for the app 
 
 ## Summary
 
-| What | Vercel project | Root Directory | Main env vars |
-|------|----------------|-----------------|----------------|
-| **Backend** | e.g. `slai-api` | (empty) | `GEMINI_API_KEY`, `AUTOCOMPLETE_AUTH_TOKEN`, Supabase & admin vars |
-| **Frontend** | e.g. `slai-app` | `frontend` | `NEXT_PUBLIC_API_URL` = backend URL |
+| What | Where | Root / Start | Main env vars |
+|------|--------|----------------|----------------|
+| **Backend** | Railway (or Render) | repo root, `uvicorn app.main:app --host 0.0.0.0 --port $PORT` | `GEMINI_API_KEY`, `AUTOCOMPLETE_AUTH_TOKEN`, Supabase & admin vars |
+| **Frontend** | Vercel | `frontend` | `NEXT_PUBLIC_API_URL` = your Railway (or Render) backend URL |
 
 If you change the backend URL later, update `NEXT_PUBLIC_API_URL` in the frontend project and redeploy the frontend.
