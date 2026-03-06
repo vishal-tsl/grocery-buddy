@@ -1,9 +1,36 @@
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.image_proxy import router as image_router
 from app.api.admin import router as admin_router
 from app.config import get_settings
+
+
+class ReflectOriginCORS(BaseHTTPMiddleware):
+    """Set CORS headers by reflecting the request Origin so any frontend URL is allowed."""
+
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        if request.method == "OPTIONS" and origin:
+            from starlette.responses import Response
+            return Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    "Access-Control-Max-Age": "86400",
+                },
+            )
+        response = await call_next(request)
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Max-Age"] = "86400"
+        return response
 
 
 def create_app() -> FastAPI:
@@ -32,7 +59,8 @@ def create_app() -> FastAPI:
         version=settings.app_version,
     )
     
-    # Configure CORS (allow_credentials=False so allow_origins=["*"] is valid in browsers)
+    # CORS: reflect request Origin so any frontend (incl. Vercel preview URLs) is allowed
+    app.add_middleware(ReflectOriginCORS)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
