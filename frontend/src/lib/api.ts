@@ -1,6 +1,6 @@
 import { ParseListRequest, ParseListResponse, RecipeRequest, RecipeResponse } from "@/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 export function getAdminToken(): string | null {
   if (typeof window === "undefined") return null;
