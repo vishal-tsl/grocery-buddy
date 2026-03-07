@@ -31,8 +31,19 @@
 6. **Test the backend**  
    Open `https://your-app.up.railway.app/health` in the browser. You should see `{"status":"healthy",...}`. Use this URL as the backend URL for the frontend.
 
-**Alternative: Render**  
-At [render.com](https://render.com): **New** → **Web Service** → connect repo, **Root Directory** empty, **Build Command** `pip install -r requirements.txt`, **Start Command** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Add env vars, then deploy and copy the service URL.
+**Alternative: Render (Blueprint)**  
+The repo includes a **`render.yaml`** so you can deploy the backend in one go:
+
+1. Go to [render.com](https://render.com) and sign in with GitHub.
+2. **New** → **Blueprint** → connect the `grocery-buddy` repo.
+3. Render will read `render.yaml` and create a Web Service. Set the **env vars** in the dashboard (they’re listed in the blueprint; values are not in the repo):
+   - `GEMINI_API_KEY`, `AUTOCOMPLETE_AUTH_TOKEN`
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
+   - `ADMIN_ALLOWED_EMAIL`, `ADMIN_PANEL_PASSWORD`
+4. Deploy. Copy the service URL (e.g. `https://grocery-buddy-api.onrender.com`) and use it as `NEXT_PUBLIC_API_URL` for the frontend.
+
+**Manual Render Web Service**  
+**New** → **Web Service** → connect repo → **Root Directory** empty, **Build Command** `pip install -r requirements.txt`, **Start Command** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Add env vars, then deploy.
 
 ---
 

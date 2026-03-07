@@ -1,0 +1,25 @@
+# Render Blueprint: backend API (FastAPI)
+# Connect this repo at render.com → New → Blueprint → select this repo
+services:
+  - type: web
+    runtime: python
+    name: grocery-buddy-api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AUTOCOMPLETE_AUTH_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ADMIN_ALLOWED_EMAIL
+        sync: false
+      - key: ADMIN_PANEL_PASSWORD
+        sync: false
+      - key: TRACKING_ENABLED
+        value: "true"
