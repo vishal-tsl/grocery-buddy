@@ -23,7 +23,12 @@ def _ip_hash(ip: str) -> str:
 
 
 def _supabase_client():
-    from supabase import create_client
+    try:
+        from supabase import create_client
+    except ImportError:
+        logger.warning("supabase-py library not installed. Tracking/Admin features will be disabled.")
+        return None
+
     s = get_settings()
     if not s.supabase_url or not s.supabase_service_role_key:
         return None
