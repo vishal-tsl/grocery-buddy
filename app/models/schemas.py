@@ -115,3 +115,35 @@ class RecipeResponse(BaseModel):
     source_url: str | None = None
     ingredients_raw: list[str]  # Original ingredient strings
     items: list[StructuredItem]  # Parsed and resolved items
+
+
+# Agent APIs schemas
+class AgentParseRequest(BaseModel):
+    """Request body for POST /agents/parse endpoint."""
+    text: str = Field(..., description="Raw grocery text input (multi-line, messy)")
+
+
+class AgentParseResponse(BaseModel):
+    """Response body for POST /agents/parse endpoint."""
+    items: list[str]
+
+
+class AgentNormalizeRequest(BaseModel):
+    """Request body for POST /agents/normalize endpoint."""
+    items: list[str] = Field(..., description="List of raw grocery item strings to normalize")
+
+
+class AgentNormalizeResponse(BaseModel):
+    """Response body for POST /agents/normalize endpoint."""
+    items: list[NormalizedItem]
+
+
+class AgentResolveRequest(BaseModel):
+    """Request body for POST /agents/resolve endpoint."""
+    items: list[NormalizedItem] = Field(..., description="List of normalized items to resolve against the product catalog")
+
+
+class AgentResolveResponse(BaseModel):
+    """Response body for POST /agents/resolve endpoint."""
+    items: list[StructuredItem]
+
