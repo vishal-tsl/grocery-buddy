@@ -311,7 +311,7 @@ class ProductResolver:
                 sku=suggestion.sku,
                 name=suggestion.name,
                 brand=suggestion.brand,
-                image_url=suggestion.image_url if suggestion.suggestion_type == SuggestionType.PRODUCT else None
+                image_url=suggestion.image_url,
             ))
 
         for suggestion in resolved.api_suggestions:
@@ -349,11 +349,13 @@ class ProductResolver:
         print(f"DEBUG: Resolving '{product_name}' Source='{m_source}' Image='{image_url}'")
 
         if "keyword" in m_source:
-            image_url = None  # SUPPRESS images for keywords
-            brand = None      # SUPPRESS brand for keywords
+            brand = None  # SUPPRESS brand for keywords (UI treats keyword rows without brand line)
             # If the keyword name is much longer than the normalized name, prefer normalized
             if len(product_name.split()) > len(normalized_item.normalized_product_name.split()) + 1:
                 product_name = self._to_title_case(normalized_item.normalized_product_name)
+            # Keep image_url from resolution when API provided one; optional picker fallback
+            if not image_url and selected_option_index and 1 <= selected_option_index <= len(options):
+                image_url = options[selected_option_index - 1].image_url
         elif "product" in m_source:
             # If we matched a product, ensure we have an image
             if not image_url and selected_option_index and 1 <= selected_option_index <= len(options):
