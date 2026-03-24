@@ -12,6 +12,7 @@ CRITICAL RULES:
 3. Extract unit (oz, lb, gallon, tbsp, etc.) into the unit field
 4. Extract quantity as NUMBER only
 5. has_brand = true when ANY brand name is present
+6. A **leading** number before the product is usually **item count** (e.g. **2 La Farmier mango yogurt**). **Size** on the product uses a unit (**8 oz**, **2 lb**).
 
 BRAND HANDLING (IMPORTANT):
 - has_brand = true ONLY if user explicitly named a brand (proper noun/company name)
@@ -19,7 +20,7 @@ BRAND HANDLING (IMPORTANT):
 - **STRICT SPELLING**: Always preserve brand spellings exactly as provided (e.g., "La Fermière").
 - "Cool Ranch" is a FLAVOR of Doritos - Doritos is the brand
 - Generic words are NOT brands: shredded, organic, fresh, dijon, bella, red, etc.
-- When brand IS specified: normalized_product_name = "Brand Product Flavor/Variety"
+- When brand IS specified: normalized_product_name = "Brand Attribute Product"
 - When NO brand: normalized_product_name = just the product with modifiers
 
 TERMINOLOGY MAPPING (for better API matches):
@@ -41,8 +42,12 @@ Examples WITHOUT brand:
   - "Dijon mustard" → has_brand: false (Dijon is a style, not a brand)
   - "portobello mushroom" → has_brand: false (portobello is variety)
 
+ALTERNATIVES WITH "OR" (CRITICAL):
+- If the user lists **two or more alternative specs** joined by **or** (e.g. "Ground beef 80/20 or 85/15", "milk 2% or whole"), set `normalized_product_name` to the **core product** only (e.g. "Ground beef", "milk") and set `notes` to **those specs as written** (e.g. "80/20 or 85/15", "2% or whole").
+- If there is **only one** spec and **no** "or" (e.g. "Ground beef 80/20"), put the **full** product phrase in `normalized_product_name` (still split out quantity/unit if present) and leave `notes` empty unless something else needs a note.
+
 SIZE/WEIGHT → NOTES:
-- 8oz, 16oz, 1lb, 2lb, gallon, pint, etc. → move to notes
+- 8 oz, 16 oz, 1 lb, 2 lb, gallon, pint, etc. → move to notes (accept **8oz** or **8 oz** from users; when writing notes, prefer a space: **8 oz**)
 - These are specifications, not core product identity
 
 MODIFIERS (when no brand):
@@ -55,11 +60,11 @@ TYPO FIXES:
 
 OUTPUT FORMAT:
 {
-  "normalized_product_name": "string - Brand + Product + Flavor if branded, OR just Product if generic",
+  "normalized_product_name": "string - Brand + Attribute + Product if branded, OR just Product if generic",
   "quantity": number or null,
   "unit": "string - the unit of measure (oz, lb, tbsp, cup, etc.)",
   "modifiers": ["array - only for generic products without brand"],
-  "notes": "string - size specs (8oz), uncertainty, or alternatives",
+  "notes": "string - size specs (e.g. 8 oz), uncertainty, or alternatives",
   "has_brand": true if ANY brand mentioned, false otherwise
 }
 
@@ -74,13 +79,13 @@ Output: {"normalized_product_name": "Cool Ranch Doritos", "quantity": null, "uni
 Input: "Kerrygold butter"
 Output: {"normalized_product_name": "Kerrygold butter", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
 
-Input: "La Farmier yogurt mango flavor 2"
+Input: "2 La Farmier yogurt mango flavor"
 Output: {"normalized_product_name": "La Farmier mango yogurt", "quantity": 2, "unit": null, "modifiers": [], "notes": "", "has_brand": true}
 
 Input: "shredded cheese"
 Output: {"normalized_product_name": "cheese", "quantity": null, "unit": null, "modifiers": ["shredded"], "notes": "", "has_brand": false}
 
-Input: "tomato paste 8oz"
+Input: "tomato paste 8 oz"
 Output: {"normalized_product_name": "tomato paste", "quantity": 8, "unit": "oz", "modifiers": [], "notes": "", "has_brand": false}
 
 Input: "chicken breast"
@@ -120,7 +125,10 @@ Input: "protein-enriched milk"
 Output: {"normalized_product_name": "milk", "quantity": null, "unit": null, "modifiers": ["high protein"], "notes": "", "has_brand": false}
 
 Input: "Ground beef 80/20 or 85/15"
-Output: {"normalized_product_name": "Ground beef 80/20", "quantity": null, "unit": null, "modifiers": [], "notes": "or 85/15", "has_brand": false}
+Output: {"normalized_product_name": "Ground beef", "quantity": null, "unit": null, "modifiers": [], "notes": "80/20 or 85/15", "has_brand": false}
+
+Input: "Ground beef 80/20"
+Output: {"normalized_product_name": "Ground beef 80/20", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 """
 
 

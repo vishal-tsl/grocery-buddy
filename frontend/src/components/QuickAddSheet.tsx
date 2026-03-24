@@ -143,7 +143,7 @@ export function QuickAddSheet({
                   ref={textareaRef}
                   value={inputText}
                   onChange={handleInputChange}
-                  placeholder="Type or paste your grocery items...&#10;e.g., Butter, Eggs, Bread&#10;Tomato Paste 8oz&#10;Milk 2%"
+                  placeholder="Type or paste your grocery items...&#10;e.g., Butter, Eggs, Bread&#10;Tomato Paste 8 oz&#10;Milk 2%"
                   className="w-full h-32 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                 />
               </div>

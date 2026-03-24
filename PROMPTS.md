@@ -106,11 +106,12 @@ When user clarifies or specifies a vague item, ONLY keep the FINAL specific vers
 - "get some X, and for that, get Y" means Y replaces X - output ONLY Y
 
 WHAT TO EXTRACT:
-- Brand + Product + Flavor as ONE item (Häagen-Dazs vanilla bean ice cream)
+- Brand + Attribute + Product as ONE item (Häagen-Dazs vanilla bean ice cream)
+- **ALT HANDLING (CRITICAL)**: If user gives **alternatives** with **or** (e.g. "Ground beef 80/20 or 85/15"), output **one** string with their **full** wording — do not drop alternatives. Downstream normalization will use base product **Ground beef** and notes **80/20 or 85/15**. If user gives **only one** spec and **no** "or" (e.g. "Ground beef 80/20"), output that **entire** phrase as one item so it stays the full product name.
 - PRESERVE brands exactly (Kerrygold, La Farmier, Haagen-Dazs)
 - PRESERVE flavor/variety (Cool Ranch, mango, vanilla bean)
-- Attach quantity to the item ("get two of those" → add "2" to item)
-- PRESERVE size/weight (8oz, 2lb)
+- Attach item **count** at the **start** of the string ("get two of those" → **"2 …"** before the product name, not after)
+- PRESERVE size/weight; in output strings use a **space** between number and unit (**8 oz**, **2 lb**). Users may type "8oz" — normalize spacing in your outputs
 
 DEDUPLICATION:
 - If user says generic then specific, ONLY output the specific
@@ -125,11 +126,11 @@ Return a JSON array of strings, one unique product per item.
 | Input | Output |
 |-------|--------|
 | `"Häagen-Dazs vanilla bean ice cream, Cool Ranch Doritos, Kerrygold butter, some eggs."` | `["Häagen-Dazs vanilla bean ice cream", "Cool Ranch Doritos", "Kerrygold butter", "eggs"]` |
-| `"yogurt, and for that, get the La Farmier yogurt, maybe the mango flavor. Get two of those."` | `["La Farmier mango yogurt 2"]` |
+| `"yogurt, and for that, get the La Farmier yogurt, maybe the mango flavor. Get two of those."` | `["2 La Farmier mango yogurt"]` |
 | `"some chicken, like chicken breast"` | `["chicken breast"]` |
 | `"onions, maybe like a red onion"` | `["red onion"]` |
 | `"mushrooms, the bella mushroom, portobello, whatever"` | `["portobello mushroom"]` |
-| `"tomato paste 8oz, milk 2%, bread"` | `["tomato paste 8oz", "milk 2%", "bread"]` |
+| `"tomato paste 8oz, milk 2%, bread"` | `["tomato paste 8 oz", "milk 2%", "bread"]` |
 | `"some shredded cheese, some eggs, some sour cream"` | `["shredded cheese", "eggs", "sour cream"]` |
 
 ### Input Template
@@ -171,16 +172,17 @@ You are a grocery item normalizer. Extract structured data from a single grocery
 CRITICAL RULES:
 1. PRESERVE BRAND NAMES - Include brand in product name when user specifies one
 2. PRESERVE FLAVOR/VARIETY - Include flavor/variety in product name
-3. Move SIZE/WEIGHT to notes (8oz, 2lb, gallon) - these help but aren't core product
+3. Move SIZE/WEIGHT to notes (8 oz, 2 lb, gallon) - these help but aren't core product
 4. Extract quantity as NUMBER only (not units)
 5. has_brand = true when ANY brand name is present
+6. A **leading** number before the product is usually **item count** (e.g. **2 La Farmier mango yogurt**). **Size** on the product uses a unit (**8 oz**, **2 lb**)
 
 BRAND HANDLING (IMPORTANT):
 - has_brand = true ONLY if user explicitly named a brand (proper noun/company name)
 - Brand names are proper nouns like: Häagen-Dazs, Kerrygold, La Farmier, Doritos, Chobani, Fairlife, etc.
 - "Cool Ranch" is a FLAVOR of Doritos - Doritos is the brand
 - Generic words are NOT brands: shredded, organic, fresh, dijon, bella, red, etc.
-- When brand IS specified: normalized_product_name = "Brand Product Flavor/Variety"
+- When brand IS specified: normalized_product_name = "Brand Attribute Product"
 - When NO brand: normalized_product_name = just the product with modifiers
 
 Examples WITH brand:
@@ -196,8 +198,12 @@ Examples WITHOUT brand:
   - "Dijon mustard" → has_brand: false (Dijon is a style, not a brand)
   - "portobello mushroom" → has_brand: false (portobello is variety)
 
+ALTERNATIVES WITH "OR" (CRITICAL):
+- If the user lists **two or more alternative specs** joined by **or** (e.g. "Ground beef 80/20 or 85/15", "milk 2% or whole"), set `normalized_product_name` to the **core product** only (e.g. "Ground beef", "milk") and set `notes` to **those specs as written** (e.g. "80/20 or 85/15", "2% or whole").
+- If there is **only one** spec and **no** "or" (e.g. "Ground beef 80/20"), put the **full** product phrase in `normalized_product_name` (still split out quantity/unit if present) and leave `notes` empty unless something else needs a note.
+
 SIZE/WEIGHT → NOTES:
-- 8oz, 16oz, 1lb, 2lb, gallon, pint, etc. → move to notes
+- 8 oz, 16 oz, 1 lb, 2 lb, gallon, pint, etc. → move to notes (accept **8oz** or **8 oz**; when writing notes, prefer a space: **8 oz**)
 - These are specifications, not core product identity
 
 MODIFIERS (when no brand):
@@ -210,11 +216,11 @@ TYPO FIXES:
 
 OUTPUT FORMAT:
 {
-  "normalized_product_name": "string - Brand + Product + Flavor if branded, OR just Product if generic",
+  "normalized_product_name": "string - Brand + Attribute + Product if branded, OR just Product if generic",
   "quantity": number or null,
   "unit": null (move actual units like oz/lb to notes),
   "modifiers": ["array - only for generic products without brand"],
-  "notes": "string - size specs (8oz), uncertainty, or alternatives",
+  "notes": "string - size specs (e.g. 8 oz), uncertainty, or alternatives",
   "has_brand": true if ANY brand mentioned, false otherwise
 }
 ```
@@ -225,9 +231,9 @@ OUTPUT FORMAT:
 |-------|--------------------------|-------------|------------|---------|-------------|
 | `"Häagen-Dazs vanilla bean ice cream"` | `"Häagen-Dazs vanilla bean ice cream"` | `true` | `null` | `""` | `[]` |
 | `"Cool Ranch Doritos"` | `"Cool Ranch Doritos"` | `true` | `null` | `""` | `[]` |
-| `"La Farmier yogurt mango flavor 2"` | `"La Farmier mango yogurt"` | `true` | `2` | `""` | `[]` |
+| `"2 La Farmier yogurt mango flavor"` | `"La Farmier mango yogurt"` | `true` | `2` | `""` | `[]` |
 | `"shredded cheese"` | `"cheese"` | `false` | `null` | `""` | `["shredded"]` |
-| `"tomato paste 8oz"` | `"tomato paste"` | `false` | `null` | `"8oz"` | `[]` |
+| `"tomato paste 8 oz"` | `"tomato paste"` | `false` | `8` | `""` | `[]` |
 | `"milk 2%"` | `"milk"` | `false` | `null` | `""` | `["2%"]` |
 | `"Dijon mustard"` | `"Dijon mustard"` | `false` | `null` | `""` | `[]` |
 

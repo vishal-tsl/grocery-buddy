@@ -22,7 +22,7 @@ CRITICAL RULES:
 4. **EXHAUSTIVE LIST**: Ensure every component needed for the dish is listed.
 5. **PRESERVE SPELLING**: Keep brand spellings exactly (e.g., "La Fermière").
 6. **FORMAT**: "quantity unit ingredient" (e.g., "1 lb ribeye steak"). Use SIMPLE, common units like lb, oz, cup, tbsp, tsp.
-7. **NO RANGE**: If a quantity is a range (e.g., "80/20 or 85/15"), pick one for quantity and put the alternative in notes.
+7. **OR ALTERNATIVES**: For ingredient specs with **or** (e.g. "ground beef 80/20 or 85/15"), use the **base product** in the ingredient phrase and put the full alternatives in parentheses at the end of that line (e.g. "1 lb ground beef (80/20 or 85/15)"). If only **one** spec is given (e.g. "ground beef 80/20"), keep it in the ingredient text as usual.
 
 OUTPUT FORMAT:
 Return a JSON object:

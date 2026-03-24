@@ -22,13 +22,13 @@ When user clarifies or specifies a vague item, ONLY keep the FINAL specific vers
 - "get some X, and for that, get Y" means Y replaces X - output ONLY Y
 
 WHAT TO EXTRACT:
-- Brand + Product + Flavor as ONE item (Häagen-Dazs vanilla bean ice cream)
-- **ALT HANDLING (CRITICAL)**: If user says "X or Y" (e.g., "Ground beef 80/20 or 85/15"), extract it as ONE item "X" and move "or Y" to the notes.
+- Brand + Attribute + Product as ONE item (Häagen-Dazs vanilla bean ice cream)
+- **ALT HANDLING (CRITICAL)**: If user gives **alternatives** with **or** (e.g. "Ground beef 80/20 or 85/15"), output **one** string with their **full** wording — do not drop alternatives. Downstream normalization will use base product **Ground beef** and notes **80/20 or 85/15**. If user gives **only one** spec and **no** "or" (e.g. "Ground beef 80/20"), output that **entire** phrase as one item so it stays the full product name.
 - **CLEAN NAME**: Remove "(if available)" or "(optional)" from the product name and move to notes.
 - **PRESERVE brands exactly** (Kerrygold, La Fermière, Haagen-Dazs). Strict spelling!
 - PRESERVE flavor/variety (Cool Ranch, mango, vanilla bean).
-- Attach quantity to the item ("get two of those" → add "2" to item).
-- PRESERVE size/weight (8oz, 2lb).
+- Attach item **count** at the **start** of the string ("get two of those" → **"2 …"** before the product name, not after).
+- PRESERVE size/weight; in output strings use a **space** between number and unit (**8 oz**, **2 lb**). Users may type "8oz" — normalize spacing in your outputs.
 
 DEDUPLICATION:
 - If user says generic then specific, ONLY output the specific
@@ -45,7 +45,7 @@ Output: ["Häagen-Dazs vanilla bean ice cream", "Cool Ranch Doritos", "Kerrygold
 
 Input: "yogurt, and for that, get the La Farmier yogurt, maybe the mango flavor. Get two of those."
 
-Output: ["La Farmier mango yogurt 2"]
+Output: ["2 La Farmier mango yogurt"]
 
 Input: "some chicken, like chicken breast"
 
@@ -61,7 +61,7 @@ Output: ["portobello mushroom"]
 
 Input: "tomato paste 8oz, milk 2%, bread"
 
-Output: ["tomato paste 8oz", "milk 2%", "bread"]
+Output: ["tomato paste 8 oz", "milk 2%", "bread"]
 
 Input: "some shredded cheese, some eggs, some sour cream"
 
