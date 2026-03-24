@@ -57,6 +57,26 @@ export async function healthCheck(): Promise<{ status: string; version: string }
   return response.json();
 }
 
+export async function submitFeedback(payload: {
+  type: "batch" | "item";
+  positive: boolean;
+  comment?: string | null;
+  raw_input?: string;
+  item_count?: number;
+  item_id?: string;
+  product_name?: string;
+  sku?: string | null;
+  match_source?: string;
+}): Promise<{ ok: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error("Failed to submit feedback");
+  return response.json();
+}
+
 // Admin panel (testing)
 export async function adminLogin(
   email: string,

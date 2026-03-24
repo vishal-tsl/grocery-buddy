@@ -9,7 +9,7 @@ import { GroceryItem } from "@/types";
 interface QuickAddSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddItems: (items: GroceryItem[]) => void;
+  onAddItems: (items: GroceryItem[], rawInput?: string) => void;
   listName: string;
 }
 
@@ -71,7 +71,7 @@ export function QuickAddSheet({
         autocomplete_query: item.autocomplete_query,
       }));
 
-      onAddItems(newItems);
+      onAddItems(newItems, inputText.trim());
       setInputText("");
       setParsedItems([]);
       onClose();
@@ -88,7 +88,7 @@ export function QuickAddSheet({
         checked: false,
         match_source: "ai_text",
       }));
-      onAddItems(fallbackItems);
+      onAddItems(fallbackItems, inputText.trim());
       setInputText("");
       setParsedItems([]);
       onClose();

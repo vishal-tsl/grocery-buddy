@@ -5,6 +5,7 @@ import { GroceryItem as GroceryItemType, MatchSource } from "@/types";
 import { urlImageProvider } from "@/lib/image";
 import clsx from "clsx";
 import { Icon } from "./Icon";
+import { ItemFeedbackButton } from "./ItemFeedbackButton";
 
 const MATCH_SOURCE_LABEL: Record<MatchSource, string> = {
   product: "Product",
@@ -155,8 +156,12 @@ export function GroceryItem({
           </div>
         </div>
 
-        {/* Image or placeholder on the right – tappable for popup */}
-        <button
+        {/* Feedback button + Image on the right */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div onClick={(e) => e.stopPropagation()}>
+            <ItemFeedbackButton item={item} />
+          </div>
+          <button
           type="button"
           className={clsx(
             "w-11 h-11 rounded-lg border border-border-light dark:border-border-dark flex-shrink-0 flex items-center justify-center overflow-hidden",
@@ -181,6 +186,7 @@ export function GroceryItem({
             <Icon name="image" size={20} className="text-gray-400 dark:text-gray-500" />
           )}
         </button>
+        </div>
       </div>
 
       {/* Image popup – big view or simple no-image placeholder */}

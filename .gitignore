@@ -39,3 +39,13 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Local output / scratch files
+output.txt
+pytest_output.txt
+*_output.txt
+*_output_utf8.txt
+final_verification*.txt
+verification_output*.txt
+alternatives_output.txt
+body.json

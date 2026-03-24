@@ -22,17 +22,23 @@ def _ip_hash(ip: str) -> str:
     return hashlib.sha256(ip.encode()).hexdigest()[:16]
 
 
-def _supabase_client():
-    try:
-        from supabase import create_client
-    except ImportError:
-        logger.warning("supabase-py library not installed. Tracking/Admin features will be disabled.")
-        return None
-
+def _supabase_headers():
     s = get_settings()
     if not s.supabase_url or not s.supabase_service_role_key:
         return None
-    return create_client(s.supabase_url, s.supabase_service_role_key)
+    return {
+        "apikey": s.supabase_service_role_key,
+        "Authorization": f"Bearer {s.supabase_service_role_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
+
+
+def _supabase_url(table: str) -> str | None:
+    s = get_settings()
+    if not s.supabase_url:
+        return None
+    return f"{s.supabase_url.rstrip('/')}/rest/v1/{table}"
 
 
 async def geo_from_ip(ip: str) -> dict[str, str | None]:
@@ -76,9 +82,11 @@ def capture_event_sync(
     if not s.tracking_enabled or not s.supabase_url or not s.supabase_service_role_key:
         return
     try:
-        sb = _supabase_client()
-        if not sb:
+        headers = _supabase_headers()
+        url = _supabase_url(TABLE_EVENTS)
+        if not headers or not url:
             return
+
         row = {
             "request_id": request_id,
             "client_ip": client_ip,
@@ -93,7 +101,9 @@ def capture_event_sync(
             "status": status,
             "latency_ms": round(latency_ms, 2),
         }
-        sb.table(TABLE_EVENTS).insert(row).execute()
+        with httpx.Client(timeout=5.0) as client:
+            r = client.post(url, json=row, headers=headers)
+            r.raise_for_status()
     except Exception as e:
         logger.warning("tracking capture_event failed: %s", e)
 
@@ -139,13 +149,24 @@ def purge_old_events() -> int:
     if not s.tracking_enabled or not s.supabase_url or not s.supabase_service_role_key:
         return 0
     try:
-        sb = _supabase_client()
-        if not sb:
+        headers = _supabase_headers()
+        url = _supabase_url(TABLE_EVENTS)
+        if not headers or not url:
             return 0
+        
+        s = get_settings()
         cutoff = (datetime.now(timezone.utc) - timedelta(days=s.tracking_retention_days)).isoformat()
-        # Supabase/PostgREST: delete with filter
-        r = sb.table(TABLE_EVENTS).delete().lt("created_at", cutoff).execute()
-        return len(r.data) if r.data is not None else 0
+        
+        params = {
+            "created_at": f"lt.{cutoff}"
+        }
+        headers["Prefer"] = "return=representation"
+        
+        with httpx.Client(timeout=10.0) as client:
+            r = client.delete(url, params=params, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            return len(data) if isinstance(data, list) else 0
     except Exception as e:
         logger.warning("purge_old_events failed: %s", e)
         return 0

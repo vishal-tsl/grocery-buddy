@@ -9,23 +9,30 @@ NORMALIZER_SYSTEM_PROMPT = """You are a grocery item normalizer. Extract structu
 CRITICAL RULES:
 1. PRESERVE BRAND NAMES - Include brand in product name when user specifies one
 2. PRESERVE FLAVOR/VARIETY - Include flavor/variety in product name
-3. Move SIZE/WEIGHT to notes (8oz, 2lb, gallon) - these help but aren't core product
-4. Extract quantity as NUMBER only (not units)
+3. Extract unit (oz, lb, gallon, tbsp, etc.) into the unit field
+4. Extract quantity as NUMBER only
 5. has_brand = true when ANY brand name is present
 
 BRAND HANDLING (IMPORTANT):
 - has_brand = true ONLY if user explicitly named a brand (proper noun/company name)
-- Brand names are proper nouns like: Häagen-Dazs, Kerrygold, La Farmier, Doritos, Chobani, Fairlife, etc.
+- Brand names are proper nouns like: Häagen-Dazs, Kerrygold, La Fermière, Doritos, Chobani, Fairlife, etc.
+- **STRICT SPELLING**: Always preserve brand spellings exactly as provided (e.g., "La Fermière").
 - "Cool Ranch" is a FLAVOR of Doritos - Doritos is the brand
 - Generic words are NOT brands: shredded, organic, fresh, dijon, bella, red, etc.
 - When brand IS specified: normalized_product_name = "Brand Product Flavor/Variety"
 - When NO brand: normalized_product_name = just the product with modifiers
 
+TERMINOLOGY MAPPING (for better API matches):
+- **Fat Content**: Map "full-fat" (yogurt/milk) to "whole milk" or "5%".
+- **Protein**: Map "protein-enriched" to "high protein".
+- **Low Fat**: Map "low-fat" to "2%".
+- These mappings help the downstream resolver find products the API understands.
+
 Examples WITH brand:
   - "Häagen-Dazs vanilla bean ice cream" → has_brand: true, name: "Häagen-Dazs vanilla bean ice cream"
   - "Cool Ranch Doritos" → has_brand: true (Doritos is brand), name: "Cool Ranch Doritos"
   - "Kerrygold butter" → has_brand: true, name: "Kerrygold butter"
-  - "La Farmier mango yogurt" → has_brand: true, name: "La Farmier mango yogurt"
+  - "La Fermière mango yogurt" → has_brand: true, name: "La Fermière mango yogurt"
 
 Examples WITHOUT brand:
   - "eggs" → has_brand: false, name: "eggs"
@@ -50,7 +57,7 @@ OUTPUT FORMAT:
 {
   "normalized_product_name": "string - Brand + Product + Flavor if branded, OR just Product if generic",
   "quantity": number or null,
-  "unit": null (move actual units like oz/lb to notes),
+  "unit": "string - the unit of measure (oz, lb, tbsp, cup, etc.)",
   "modifiers": ["array - only for generic products without brand"],
   "notes": "string - size specs (8oz), uncertainty, or alternatives",
   "has_brand": true if ANY brand mentioned, false otherwise
@@ -74,7 +81,7 @@ Input: "shredded cheese"
 Output: {"normalized_product_name": "cheese", "quantity": null, "unit": null, "modifiers": ["shredded"], "notes": "", "has_brand": false}
 
 Input: "tomato paste 8oz"
-Output: {"normalized_product_name": "tomato paste", "quantity": null, "unit": null, "modifiers": [], "notes": "8oz", "has_brand": false}
+Output: {"normalized_product_name": "tomato paste", "quantity": 8, "unit": "oz", "modifiers": [], "notes": "", "has_brand": false}
 
 Input: "chicken breast"
 Output: {"normalized_product_name": "chicken breast", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
@@ -100,17 +107,20 @@ Output: {"normalized_product_name": "paper towels", "quantity": null, "unit": nu
 Input: "Dijon mustard"
 Output: {"normalized_product_name": "Dijon mustard", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
-Input: "eggs"
-Output: {"normalized_product_name": "eggs", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+Input: "2 lbs chicken breast"
+Output: {"normalized_product_name": "chicken breast", "quantity": 2, "unit": "lbs", "modifiers": [], "notes": "", "has_brand": false}
 
 Input: "sour cream"
 Output: {"normalized_product_name": "sour cream", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
 
-Input: "portobello mushroom"
-Output: {"normalized_product_name": "portobello mushroom", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+Input: "Greek yogurt plain full-fat"
+Output: {"normalized_product_name": "Greek yogurt", "quantity": null, "unit": null, "modifiers": ["plain", "5%"], "notes": "", "has_brand": false}
 
-Input: "red onion"
-Output: {"normalized_product_name": "red onion", "quantity": null, "unit": null, "modifiers": [], "notes": "", "has_brand": false}
+Input: "protein-enriched milk"
+Output: {"normalized_product_name": "milk", "quantity": null, "unit": null, "modifiers": ["high protein"], "notes": "", "has_brand": false}
+
+Input: "Ground beef 80/20 or 85/15"
+Output: {"normalized_product_name": "Ground beef 80/20", "quantity": null, "unit": null, "modifiers": [], "notes": "or 85/15", "has_brand": false}
 """
 
 

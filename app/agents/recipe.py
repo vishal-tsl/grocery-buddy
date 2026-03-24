@@ -13,15 +13,16 @@ from google import genai
 from app.config import get_settings
 
 
-RECIPE_EXTRACTION_PROMPT = """You are a recipe ingredient extractor. Given a recipe name, generate a realistic, complete ingredient list.
+RECIPE_EXTRACTION_PROMPT = """You are a recipe ingredient extractor. Given a recipe name, generate an EXHAUSTIVE, realistic ingredient list.
 
-RULES:
-1. Include ALL typical ingredients for the dish (don't skip basics like salt, oil, etc.)
-2. Include realistic quantities and units
-3. Use specific product names (e.g., "chicken breast" not just "chicken")
-4. Include brand names ONLY for products that are typically branded (e.g., "Parmesan cheese", not generic "cheese")
-5. Be specific about cuts, types, and varieties
-6. Format each ingredient as: "quantity unit ingredient" (e.g., "2 lbs chicken breast")
+CRITICAL RULES:
+1. **NO HALLUCINATIONS**: Do NOT add extra herbs (like thyme, rosemary) unless they are CORE to the specific dish named.
+2. **INCLUDE BASICS**: Always include salt, black pepper, and cooking oil/butter if required for the dish.
+3. **STRICT QUANTITIES**: Every ingredient MUST have a quantity and unit (e.g., "1/2 tsp salt", "2 tbsp olive oil"). No "salt to taste" without a base amount.
+4. **EXHAUSTIVE LIST**: Ensure every component needed for the dish is listed.
+5. **PRESERVE SPELLING**: Keep brand spellings exactly (e.g., "La Fermière").
+6. **FORMAT**: "quantity unit ingredient" (e.g., "1 lb ribeye steak"). Use SIMPLE, common units like lb, oz, cup, tbsp, tsp.
+7. **NO RANGE**: If a quantity is a range (e.g., "80/20 or 85/15"), pick one for quantity and put the alternative in notes.
 
 OUTPUT FORMAT:
 Return a JSON object:
@@ -30,7 +31,7 @@ Return a JSON object:
   "servings": number,
   "ingredients": [
     "1 lb ground beef",
-    "2 tablespoons olive oil",
+    "2 tbsp olive oil",
     ...
   ]
 }

@@ -41,6 +41,13 @@ class ProductResolver:
         # Call Autocomplete API
         suggestions = await self.autocomplete_client.search(search_query)
         
+        # fallback search with synonyms if 0 results
+        if not suggestions:
+            alternative_query = self._get_alternative_query(normalized_item)
+            if alternative_query and alternative_query != search_query:
+                suggestions = await self.autocomplete_client.search(alternative_query)
+                search_query = alternative_query
+        
         # Brand options are included in the API response - no extra calls needed
         
         # Evaluate confidence and get resolved product
@@ -52,7 +59,6 @@ class ProductResolver:
         
         # Build final structured item with safe fallbacks (images from BasketSavings only)
         return self._build_structured_item(normalized_item, resolved, search_query=search_query)
-    
     def _build_search_query(self, normalized_item: NormalizedItem) -> str:
         """Build the search query from normalized item."""
         parts = [normalized_item.normalized_product_name]
@@ -65,10 +71,44 @@ class ProductResolver:
         
         return " ".join(parts)
 
-    def _pick_best_suggestion(self, candidates: list[AutocompleteProduct]) -> AutocompleteProduct | None:
-        """Always use the first option in API order so name, image and 'Option 1' match; avoids wrong fetch."""
+    def _get_alternative_query(self, normalized_item: NormalizedItem) -> str | None:
+        """Map problematic terms to searchable synonyms."""
+        name = normalized_item.normalized_product_name.lower()
+        all_text = (name + " " + " ".join(normalized_item.modifiers)).lower()
+        
+        # Simple synonym mapping
+        synonyms = {
+            "protein-enriched": "high protein",
+            "full-fat": "whole milk",
+            "full fat": "whole milk",
+        }
+        
+        # Heuristic for dairy
+        if any(x in all_text for x in ["yogurt", "skyr", "milk", "cheese"]):
+            synonyms["full-fat"] = "5%" if "yogurt" in all_text else "whole"
+            synonyms["low-fat"] = "2%"
+            synonyms["non-fat"] = "0%"
+
+        for key, val in synonyms.items():
+            if key in all_text:
+                return all_text.replace(key, val)
+                
+        return None
+
+    def _pick_best_suggestion(self, candidates: list[AutocompleteProduct], has_brand: bool = False) -> AutocompleteProduct | None:
+        """
+        Pick the best suggestion from candidates.
+        If no brand specified, prioritize KEYWORD results to avoid over-branding.
+        """
         if not candidates:
             return None
+            
+        if not has_brand:
+            # Look for keyword/category matches first
+            for s in candidates:
+                if s.suggestion_type == SuggestionType.KEYWORD:
+                    return s
+                    
         return candidates[0]
 
     def _match_reason(self, suggestion: AutocompleteProduct, match_source: MatchSource) -> str:
@@ -110,15 +150,6 @@ class ProductResolver:
     ) -> ResolvedProduct:
         """
         Apply deterministic confidence scoring rules.
-        
-        Rules:
-        - HIGH: Exact keyword match in top 3 results -> accept with SKU
-        - MEDIUM: Category-level or partial match -> accept generic product name, no SKU
-        - LOW: No meaningful match -> use generic name, move original to notes
-        
-        Brand Logic:
-        - If user specified a brand (has_brand=True), don't show options
-        - If NO brand specified, ALWAYS show options for user to choose
         """
         # Check if user specified a brand
         user_specified_brand = normalized_item.has_brand
@@ -143,14 +174,18 @@ class ProductResolver:
         normalized_name = normalized_item.normalized_product_name.lower()
         needs_specification = not user_specified_brand
 
-        # HIGH: collect matches, prefer product-type so we get exact API name (e.g. "Natural Coconut Water Not from Concentrate")
+        # Ambiguity check: certain terms should never be HIGH confidence alone
+        is_ambiguous = normalized_name in ["shells", "sauce", "chips", "meat"]
+
+        # HIGH: collect matches
         high_matches = []
         for s in top_suggestions:
             sn = s.name.lower()
             if normalized_name in sn or all(term in sn for term in search_terms if len(term) > 2):
                 high_matches.append(s)
-        if high_matches:
-            suggestion = self._pick_best_suggestion(high_matches) or high_matches[0]
+        
+        if high_matches and not is_ambiguous:
+            suggestion = self._pick_best_suggestion(high_matches, has_brand=user_specified_brand) or high_matches[0]
             # When any product/SKU is mapped, show exact API product name in the list
             product_name = suggestion.name
             if user_specified_brand:
@@ -173,15 +208,22 @@ class ProductResolver:
                 match_reason=self._match_reason(suggestion, ms),
             )
 
-        # MEDIUM: partial match, prefer product-type suggestion
+        # MEDIUM: partial match, or ambiguous high match
         significant_terms = [t for t in search_terms if len(t) > 2]
         medium_matches = []
         for s in suggestions[:5]:
             sn = s.name.lower()
             if significant_terms and any(term in sn for term in significant_terms):
                 medium_matches.append(s)
+        
+        # Add ambiguous high matches to medium matches
+        if high_matches and is_ambiguous:
+            for s in high_matches:
+                if s not in medium_matches:
+                    medium_matches.append(s)
+
         if medium_matches:
-            suggestion = self._pick_best_suggestion(medium_matches) or medium_matches[0]
+            suggestion = self._pick_best_suggestion(medium_matches, has_brand=user_specified_brand) or medium_matches[0]
             product_name = suggestion.name
             if user_specified_brand:
                 image_url = suggestion.image_url if self._brand_matches(normalized_item, suggestion) else None
@@ -202,7 +244,8 @@ class ProductResolver:
                 match_reason=self._match_reason(suggestion, ms),
             )
 
-        first_suggestion = self._pick_best_suggestion(suggestions[:5]) or suggestions[0]
+        # LOW fallback
+        first_suggestion = self._pick_best_suggestion(suggestions[:5], has_brand=user_specified_brand) or suggestions[0]
         product_name = first_suggestion.name
         if user_specified_brand:
             image_url = first_suggestion.image_url if self._brand_matches(normalized_item, first_suggestion) else None
@@ -232,30 +275,21 @@ class ProductResolver:
     ) -> StructuredItem:
         """
         Build the final structured item with safe fallbacks.
-        
-        Never invents SKUs - only uses SKU if from API and confidence is HIGH.
-        Category is always included if available from API.
         """
         notes_parts = []
         
-        # Add existing notes from normalization
         if normalized_item.notes:
             notes_parts.append(normalized_item.notes)
         
-        # Add notes based on confidence
         if resolved.confidence == ConfidenceLevel.LOW:
-            if not normalized_item.notes:  # Don't duplicate uncertainty notes
+            if not normalized_item.notes:
                 notes_parts.append(f"Low confidence match for: '{normalized_item.original_text}'")
         
-        # Use the resolved product name (already autocompleted from API)
         product_name = resolved.product_name
         
-        # Only add modifiers if they're not already in the product name
-        # This handles cases where API didn't include the modifier
         if normalized_item.modifiers:
             modifier_str = " ".join(normalized_item.modifiers)
             if modifier_str.lower() not in product_name.lower():
-                # Check if any individual modifier is missing
                 missing_modifiers = [
                     m for m in normalized_item.modifiers 
                     if m.lower() not in product_name.lower()
@@ -264,7 +298,6 @@ class ProductResolver:
                     product_name = f"{' '.join(missing_modifiers)} {product_name}".strip()
                     product_name = self._to_title_case(product_name)
         
-        # Build options from all autocomplete API suggestions (no cap – use full API response)
         options: list[ProductOption] = []
         selected_option_index = None
         base_product_name = normalized_item.normalized_product_name.lower()
@@ -278,26 +311,14 @@ class ProductResolver:
                 sku=suggestion.sku,
                 name=suggestion.name,
                 brand=suggestion.brand,
-                image_url=suggestion.image_url
+                image_url=suggestion.image_url if suggestion.suggestion_type == SuggestionType.PRODUCT else None
             ))
 
-        # First pass: brand variations of the SAME product (e.g. "Kerrygold Butter" for "butter")
         for suggestion in resolved.api_suggestions:
-            if not suggestion.sku or not suggestion.name or suggestion.brand is None:
-                continue
-            suggestion_name_lower = suggestion.name.lower()
-            if base_product_name not in suggestion_name_lower:
-                continue
-            words_before = suggestion_name_lower.split(base_product_name)[0].strip()
-            if words_before in ["peanut", "almond", "cashew", "sunflower", "apple", "coconut", "soy"]:
+            if not suggestion.sku or not suggestion.name:
                 continue
             add_option(suggestion)
 
-        # Add all remaining API suggestions so options match full API result (e.g. 20)
-        for suggestion in resolved.api_suggestions:
-            add_option(suggestion)
-
-        # Which option (1-based) was auto-selected
         for i, opt in enumerate(options):
             if resolved.sku and opt.sku == resolved.sku:
                 selected_option_index = i + 1
@@ -306,7 +327,6 @@ class ProductResolver:
                 selected_option_index = i + 1
                 break
 
-        # Index among the full 20 suggestions (for chip: "Option 3 of 20") – for both product and keyword
         selected_suggestion_index = None
         total_suggestions = len(resolved.api_suggestions) if resolved.api_suggestions else None
         if resolved.api_suggestions and product_name:
@@ -318,19 +338,32 @@ class ProductResolver:
                 selected_suggestion_index = i + 1
                 break
         
-        # If we have a selected option and no image yet, use that option's image so it's never null when options have images
+        # Deterministic image/brand logic
         image_url = resolved.image_url
-        if not image_url and selected_option_index and 1 <= selected_option_index <= len(options):
-            image_url = options[selected_option_index - 1].image_url
-
-        # Ensure brand is set when we have options so the UI can show brand names
         brand = resolved.brand
-        if not brand and selected_option_index and 1 <= selected_option_index <= len(options):
-            brand = options[selected_option_index - 1].brand
-        if not brand and options:
+
+        # Robust enum comparison
+        m_source = str(resolved.match_source.value if hasattr(resolved.match_source, "value") else resolved.match_source).lower()
+        
+        # Use simple print for uvicorn logs
+        print(f"DEBUG: Resolving '{product_name}' Source='{m_source}' Image='{image_url}'")
+
+        if "keyword" in m_source:
+            image_url = None  # SUPPRESS images for keywords
+            brand = None      # SUPPRESS brand for keywords
+            # If the keyword name is much longer than the normalized name, prefer normalized
+            if len(product_name.split()) > len(normalized_item.normalized_product_name.split()) + 1:
+                product_name = self._to_title_case(normalized_item.normalized_product_name)
+        elif "product" in m_source:
+            # If we matched a product, ensure we have an image
+            if not image_url and selected_option_index and 1 <= selected_option_index <= len(options):
+                image_url = options[selected_option_index - 1].image_url
+            if not brand and selected_option_index and 1 <= selected_option_index <= len(options):
+                brand = options[selected_option_index - 1].brand
+        
+        # Fallback for brand if still missing for products
+        if "product" in m_source and not brand and options:
             brand = options[0].brand
-        if resolved.match_source == MatchSource.KEYWORD:
-            brand = None
         
         category = self._pick_category(resolved)
 

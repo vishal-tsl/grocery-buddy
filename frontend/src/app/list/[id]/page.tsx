@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { GroceryItem as GroceryItemComponent } from "@/components/GroceryItem";
+import { WholeFeedbackBanner } from "@/components/WholeFeedbackBanner";
 import { BottomToolbar } from "@/components/BottomToolbar";
 import { QuickAddSheet } from "@/components/QuickAddSheet";
 import { GroceryItem } from "@/types";
@@ -95,6 +96,7 @@ export default function ListPage() {
   
   const [items, setItems] = useState<GroceryItem[]>(mockItems);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [lastAddedBatch, setLastAddedBatch] = useState<{ rawInput: string; itemCount: number } | null>(null);
 
   const handleToggleItem = (id: string) => {
     setItems((prev) =>
@@ -104,13 +106,16 @@ export default function ListPage() {
     );
   };
 
-  const handleAddItems = (newItems: GroceryItem[]) => {
+  const handleAddItems = (newItems: GroceryItem[], rawInput?: string) => {
     // Category comes from API - use "Other" only as fallback
     const itemsWithCategory = newItems.map((item) => ({
       ...item,
       category: item.category || "Other",  // API provides category, fallback to "Other"
     }));
     setItems((prev) => [...prev, ...itemsWithCategory]);
+    if (rawInput) {
+      setLastAddedBatch({ rawInput, itemCount: newItems.length });
+    }
   };
 
   const completedCount = items.filter((item) => item.checked).length;
@@ -158,6 +163,13 @@ export default function ListPage() {
 
       {/* Main Content - plain list */}
       <main className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        {lastAddedBatch && (
+          <WholeFeedbackBanner
+            rawInput={lastAddedBatch.rawInput}
+            itemCount={lastAddedBatch.itemCount}
+            onDismiss={() => setLastAddedBatch(null)}
+          />
+        )}
         <div className="flex flex-col">
           {items.map((item) => (
             <GroceryItemComponent

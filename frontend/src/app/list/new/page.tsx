@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { BottomToolbar } from "@/components/BottomToolbar";
 import { QuickAddSheet } from "@/components/QuickAddSheet";
+import { WholeFeedbackBanner } from "@/components/WholeFeedbackBanner";
 import { GroceryItem as GroceryItemComponent } from "@/components/GroceryItem";
 import { GroceryItem } from "@/types";
 
@@ -12,6 +13,7 @@ export default function NewListPage() {
   const router = useRouter();
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(true); // Open by default
+  const [lastAddedBatch, setLastAddedBatch] = useState<{ rawInput: string; itemCount: number } | null>(null);
   const [listName] = useState(() => {
     const now = new Date();
     return `Groceries, ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
@@ -25,13 +27,16 @@ export default function NewListPage() {
     );
   };
 
-  const handleAddItems = (newItems: GroceryItem[]) => {
+  const handleAddItems = (newItems: GroceryItem[], rawInput?: string) => {
     // Category comes from API - use "Other" only as fallback
     const itemsWithCategory = newItems.map((item) => ({
       ...item,
       category: item.category || "Other",  // API provides category, fallback to "Other"
     }));
     setItems((prev) => [...prev, ...itemsWithCategory]);
+    if (rawInput) {
+      setLastAddedBatch({ rawInput, itemCount: newItems.length });
+    }
   };
 
   return (
@@ -59,6 +64,14 @@ export default function NewListPage() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        {/* Whole feedback banner after adding items */}
+        {lastAddedBatch && (
+          <WholeFeedbackBanner
+            rawInput={lastAddedBatch.rawInput}
+            itemCount={lastAddedBatch.itemCount}
+            onDismiss={() => setLastAddedBatch(null)}
+          />
+        )}
         {/* Add items prompt when empty */}
         {items.length === 0 && !isQuickAddOpen && (
           <div className="px-5 py-8">

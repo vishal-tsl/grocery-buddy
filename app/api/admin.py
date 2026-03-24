@@ -11,8 +11,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+import httpx
 from app.config import get_settings
-from app.services.tracking import TABLE_EVENTS, _supabase_client, purge_old_events
+from app.services.tracking import TABLE_EVENTS, _supabase_headers, _supabase_url, purge_old_events
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -91,29 +92,53 @@ async def admin_events(
     """List tracking events with filters. Requires admin token."""
     _admin_auth(request.headers.get("authorization"))
 
-    sb = _supabase_client()
-    if not sb:
+    headers = _supabase_headers()
+    url = _supabase_url(TABLE_EVENTS)
+    if not headers or not url:
         raise HTTPException(status_code=503, detail="Tracking not configured")
 
-    q = sb.table(TABLE_EVENTS).select("*", count="exact")
+    # Build PostgREST query: ?select=* &created_at=gte.ISO &country=eq.XXX ...
+    fetch_params: dict[str, str] = {"select": "*"}
     if date_from:
-        q = q.gte("created_at", f"{date_from}T00:00:00Z")
+        fetch_params["created_at"] = f"gte.{date_from}T00:00:00Z"
     if date_to:
-        q = q.lte("created_at", f"{date_to}T23:59:59.999Z")
+        fetch_params["created_at"] = f"lte.{date_to}T23:59:59.999Z"
     if country:
-        q = q.eq("country", country)
+        fetch_params["country"] = f"eq.{country}"
     if endpoint:
-        q = q.eq("endpoint", endpoint)
+        fetch_params["endpoint"] = f"eq.{endpoint}"
     if status:
-        q = q.eq("status", status)
+        fetch_params["status"] = f"eq.{status}"
     if query_text:
-        q = q.ilike("raw_input", f"%{query_text}%")
-    q = q.order("created_at", desc=True).range(offset, offset + limit - 1)
-    r = q.execute()
+        fetch_params["raw_input"] = f"ilike.*{query_text}*"
+    
+    # Sort
+    fetch_params["order"] = "created_at.desc"
+    
+    # Range header for pagination: 0-99
+    range_header = f"{offset}-{offset + limit - 1}"
+    headers["Range"] = range_header
+    headers["Prefer"] = "count=exact"
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(url, params=fetch_params, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        
+        # Get count from Content-Range header: "0-99/1234"
+        content_range = r.headers.get("Content-Range", "")
+        total_count = 0
+        if "/" in content_range:
+            try:
+                total_count = int(content_range.split("/")[-1])
+            except ValueError:
+                total_count = len(data)
+        else:
+            total_count = len(data)
 
     return {
-        "data": r.data or [],
-        "count": r.count if hasattr(r, "count") and r.count is not None else len(r.data or []),
+        "data": data,
+        "count": total_count,
     }
 
 
@@ -125,13 +150,22 @@ async def admin_metrics(
     """Aggregate metrics for dashboard. Requires admin token."""
     _admin_auth(request.headers.get("authorization"))
 
-    sb = _supabase_client()
-    if not sb:
+    headers = _supabase_headers()
+    url = _supabase_url(TABLE_EVENTS)
+    if not headers or not url:
         raise HTTPException(status_code=503, detail="Tracking not configured")
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    r = sb.table(TABLE_EVENTS).select("id", "client_ip", "country", "status", "latency_ms", "created_at").gte("created_at", cutoff).execute()
-    rows = r.data or []
+    # PostgREST: filter and select columns
+    metric_params = {
+        "select": "id,client_ip,country,status,latency_ms,created_at",
+        "created_at": f"gte.{cutoff}"
+    }
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(url, params=metric_params, headers=headers)
+        r.raise_for_status()
+        rows = r.json() or []
 
     total = len(rows)
     errors = sum(1 for x in rows if x.get("status") == "error")

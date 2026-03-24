@@ -23,10 +23,12 @@ When user clarifies or specifies a vague item, ONLY keep the FINAL specific vers
 
 WHAT TO EXTRACT:
 - Brand + Product + Flavor as ONE item (Häagen-Dazs vanilla bean ice cream)
-- PRESERVE brands exactly (Kerrygold, La Farmier, Haagen-Dazs)
-- PRESERVE flavor/variety (Cool Ranch, mango, vanilla bean)
-- Attach quantity to the item ("get two of those" → add "2" to item)
-- PRESERVE size/weight (8oz, 2lb)
+- **ALT HANDLING (CRITICAL)**: If user says "X or Y" (e.g., "Ground beef 80/20 or 85/15"), extract it as ONE item "X" and move "or Y" to the notes.
+- **CLEAN NAME**: Remove "(if available)" or "(optional)" from the product name and move to notes.
+- **PRESERVE brands exactly** (Kerrygold, La Fermière, Haagen-Dazs). Strict spelling!
+- PRESERVE flavor/variety (Cool Ranch, mango, vanilla bean).
+- Attach quantity to the item ("get two of those" → add "2" to item).
+- PRESERVE size/weight (8oz, 2lb).
 
 DEDUPLICATION:
 - If user says generic then specific, ONLY output the specific

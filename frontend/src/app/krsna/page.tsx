@@ -30,6 +30,7 @@ export default function KrsnaDashboardPage() {
   const [q, setQ] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<AdminEvent | null>(null);
   const [purgeLoading, setPurgeLoading] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<{[key: string]: boolean}>({});
 
   const loadMetrics = useCallback(async () => {
     try {
@@ -101,6 +102,18 @@ export default function KrsnaDashboardPage() {
       setPurgeLoading(false);
     }
   }
+
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus(prev => ({ ...prev, [id]: true }));
+      setTimeout(() => {
+        setCopyStatus(prev => ({ ...prev, [id]: false }));
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
+  };
 
   if (loading && !metrics) {
     return (
@@ -358,7 +371,16 @@ export default function KrsnaDashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-              <h3 className="text-lg font-semibold text-white">Event detail</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-white">Event detail</h3>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(JSON.stringify(selectedEvent, null, 2), "all")}
+                  className="px-3 py-1 rounded-lg text-xs font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
+                >
+                  {copyStatus["all"] ? "Copied!" : "Copy All (JSON)"}
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedEvent(null)}
