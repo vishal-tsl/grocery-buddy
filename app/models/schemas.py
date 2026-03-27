@@ -2,6 +2,13 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 
+class ItemIntent(str, Enum):
+    """Classifier output: how specific the user's line is."""
+    GENERIC = "generic"
+    BRANDED = "branded"
+    AMBIGUOUS = "ambiguous"
+
+
 class ConfidenceLevel(str, Enum):
     """Confidence level for product resolution."""
     HIGH = "high"      # Exact or strong semantic match
@@ -23,6 +30,10 @@ class NormalizedItem(BaseModel):
     notes: str = ""
     original_text: str = ""
     has_brand: bool = False  # True if user specified a brand name
+    # Full user paste or recipe block — used for context-aware re-ranking
+    prompt_context: str | None = None
+    # Optional LLM intent; resolver infers from has_brand if missing
+    item_intent: ItemIntent | None = None
 
 
 class ProductOption(BaseModel):
@@ -56,6 +67,7 @@ class StructuredItem(BaseModel):
     match_source: MatchSource = MatchSource.AI_TEXT  # product | keyword | ai_text
     match_reason: str = ""  # Why mapped to product/keyword (visible in network response)
     confidence: float = 0.0  # numeric confidence score (e.g., 0.95)
+    confidence_tier: ConfidenceLevel | None = None  # high / medium / low (optional for clients)
     selected_option_index: int | None = None  # 1-based index in options[] that was auto-selected, if any
     selected_suggestion_index: int | None = None  # 1-based index among full API suggestions (e.g. 3 of 20)
     total_suggestions: int | None = None  # total suggestions returned by API (e.g. 20)
@@ -99,6 +111,8 @@ class ResolvedProduct(BaseModel):
     api_suggestions: list[AutocompleteProduct] = Field(default_factory=list)
     match_source: MatchSource = MatchSource.AI_TEXT  # product | keyword | ai_text (must match match_reason)
     match_reason: str = ""
+    # Calibrated numeric score in ~[0.35, 0.95] for UI; optional for backward compat
+    confidence_numeric: float | None = None
 
 
 # Recipe-related schemas
@@ -141,6 +155,10 @@ class AgentNormalizeResponse(BaseModel):
 class AgentResolveRequest(BaseModel):
     """Request body for POST /agents/resolve endpoint."""
     items: list[NormalizedItem] = Field(..., description="List of normalized items to resolve against the product catalog")
+    prompt_context: str | None = Field(
+        default=None,
+        description="Optional full user paste applied to items missing prompt_context",
+    )
 
 
 class AgentResolveResponse(BaseModel):

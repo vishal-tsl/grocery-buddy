@@ -1,0 +1,45 @@
+# Trigger: set substitution _GCS_BUCKET to your bucket name. Add GEMINI_API_KEY (Secret Manager)
+# or --set-env-vars via Console after first deploy. Grant Cloud Build SA: run.admin,
+# artifactregistry.writer, iam.serviceAccountUser on backend-run-sa@$PROJECT_ID.
+substitutions:
+  _REGION: us-central1
+  _SERVICE: slai-api
+  _AR_REPO: backend
+  _IMAGE: slai-api
+  _GCS_BUCKET: ""
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE}"
+      - "--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--service-account=backend-run-sa@$PROJECT_ID.iam.gserviceaccount.com"
+      - "--memory=512Mi"
+      - "--cpu=1"
+      - "--min-instances=0"
+      - "--max-instances=10"
+      - "--concurrency=80"
+      - "--timeout=300"
+      - "--allow-unauthenticated"
+      - "--set-env-vars=GCS_BUCKET=${_GCS_BUCKET},ENV=production"
+      - "--quiet"
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"

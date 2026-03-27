@@ -1,13 +1,14 @@
 import time
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from app.models.schemas import (
     ParseListRequest, ParseListResponse, StructuredItem, NormalizedItem,
     RecipeRequest, RecipeResponse
 )
 from app.services.resolver import get_resolver
+from app.services.list_coalesce import merge_duplicate_structured_items
 from app.services.tracking import capture_event
 from app.agents.parser import get_parser_agent
-from app.agents.normalizer import get_normalizer_agent
+from app.agents.normalizer import apply_normalizer_guardrails, get_normalizer_agent
 from app.agents.recipe import get_recipe_agent
 
 
@@ -27,7 +28,8 @@ def parse_and_normalize(text: str) -> list[NormalizedItem]:
     
     # Step 2: Normalize each item using batch processing
     normalized_items = normalizer.normalize_batch(raw_items)
-    
+    normalized_items = [apply_normalizer_guardrails(n) for n in normalized_items]
+
     return normalized_items
 
 
@@ -88,18 +90,30 @@ async def parse_list(http_request: Request, request: ParseListRequest) -> ParseL
             print(f"DEBUG: Standard list detected, parsed {len(items_to_process)} items")
 
         if not items_to_process:
+            if is_recipe_request:
+                err = None
+                if isinstance(recipe_data, dict):
+                    err = recipe_data.get("error")
+                detail = err or "Could not extract any ingredients from this recipe."
+                raise HTTPException(status_code=422, detail=detail)
             return ParseListResponse(items=[])
 
         # Step 2: Normalize
         normalizer = get_normalizer_agent()
         normalized_items = normalizer.normalize_batch(items_to_process)
+        normalized_items = [apply_normalizer_guardrails(n) for n in normalized_items]
+        ctx = raw_input.strip()
+        normalized_items = [
+            n.model_copy(update={"prompt_context": ctx}) for n in normalized_items
+        ]
 
         # Step 3: Resolve
         resolver = get_resolver()
         structured_items = await resolver.resolve_batch(normalized_items)
-        
+        structured_items = merge_duplicate_structured_items(structured_items)
+
         total_time = time.perf_counter() - start
-        
+
         response = ParseListResponse(items=structured_items)
         try:
             await capture_event(
@@ -115,6 +129,8 @@ async def parse_list(http_request: Request, request: ParseListRequest) -> ParseL
             pass
         return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error in parse_list: {e}")
         fallback_items = []

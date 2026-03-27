@@ -27,7 +27,17 @@ export async function parseGroceryList(
   });
 
   if (!response.ok) {
-    throw new Error("Failed to parse grocery list");
+    const errBody = await response.json().catch(() => ({} as { detail?: unknown }));
+    let detail = "Failed to parse grocery list";
+    if (typeof errBody.detail === "string") {
+      detail = errBody.detail;
+    } else if (Array.isArray(errBody.detail)) {
+      detail = errBody.detail
+        .map((d: { msg?: string }) => d.msg)
+        .filter(Boolean)
+        .join(", ");
+    }
+    throw new Error(detail);
   }
 
   return response.json();

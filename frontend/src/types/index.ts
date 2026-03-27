@@ -26,6 +26,7 @@ export interface GroceryItem {
   match_reason?: string;
   /** Mapping quality score, e.g. 0.95 */
   confidence?: number;
+  confidence_tier?: "high" | "medium" | "low" | null;
   /** 1-based index in options[] that was auto-selected */
   selected_option_index?: number | null;
   /** 1-based index among full API suggestions (e.g. show "Option 3 of 20") */
@@ -65,6 +66,7 @@ export interface ParseListResponse {
     match_source?: MatchSource;
     match_reason?: string;
     confidence?: number;
+    confidence_tier?: "high" | "medium" | "low" | null;
     selected_option_index?: number | null;
     selected_suggestion_index?: number | null;
     total_suggestions?: number | null;

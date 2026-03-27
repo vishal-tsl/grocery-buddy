@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     tracking_enabled: bool = False
     tracking_retention_days: int = 30
 
+    # GCS (Cloud Run: set GCS_BUCKET; uses attached service account / ADC)
+    gcs_bucket: str = ""
+
+    # Optional LLM re-rank of top-N autocomplete candidates (extra latency/cost)
+    enable_llm_match_rerank: bool = False
+    llm_rerank_top_n: int = 10
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

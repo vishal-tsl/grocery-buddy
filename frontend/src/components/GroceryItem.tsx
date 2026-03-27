@@ -47,9 +47,11 @@ export function GroceryItem({
   const [thumbError, setThumbError] = useState(false);
 
   const displayName = item.product_name;
+  const isKeyword = item.match_source === "keyword";
+  const showImageSlot = !isKeyword || Boolean(item.image_url);
   const itemImageUrl = urlImageProvider(item.image_url, "s");
-  const hasImage = itemImageUrl && !thumbError;
-  const brand = item.match_source === "keyword"
+  const hasImage = Boolean(itemImageUrl && !thumbError);
+  const brand = isKeyword
     ? null
     : (
       item.brand ??
@@ -63,6 +65,7 @@ export function GroceryItem({
 
   const handleImageAreaClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!hasImage) return;
     setImagePopupOpen(true);
   };
 
@@ -98,18 +101,32 @@ export function GroceryItem({
               </span>
             )}
             {/* Quick action pills */}
-            {!item.checked && (item.notes || item.quantity) && (
+            {!item.checked && item.notes && (
+              <p
+                className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-3 break-words font-serif"
+                title={item.notes}
+              >
+                <span className="text-gray-500 dark:text-gray-500" aria-hidden>
+                  &ldquo;
+                </span>
+                {item.notes}
+                <span className="text-gray-500 dark:text-gray-500" aria-hidden>
+                  &rdquo;
+                </span>
+              </p>
+            )}
+            {!item.checked && item.quantity != null && (
               <div className="flex flex-wrap gap-2 mt-1">
-                {item.notes && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                    Note
-                  </span>
-                )}
-                {item.quantity && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                    Qty: {item.quantity}
-                  </span>
-                )}
+                <span
+                  className={clsx(
+                    "px-2 py-0.5 rounded text-[10px] font-medium",
+                    item.quantity !== 1
+                      ? "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  )}
+                >
+                  Qty: {item.quantity}
+                </span>
               </div>
             )}
             {/* Product/Keyword + Confidence + Selected option index */}
@@ -161,31 +178,32 @@ export function GroceryItem({
           <div onClick={(e) => e.stopPropagation()}>
             <ItemFeedbackButton item={item} />
           </div>
-          <button
-          type="button"
-          className={clsx(
-            "w-11 h-11 rounded-lg border border-border-light dark:border-border-dark flex-shrink-0 flex items-center justify-center overflow-hidden",
-            hasImage ? "bg-white" : "bg-gray-100 dark:bg-gray-800",
-            item.checked && hasImage && "opacity-50 grayscale"
-          )}
-          onClick={handleImageAreaClick}
-          aria-label={hasImage ? "View image" : "No image"}
-        >
-          {hasImage ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={itemImageUrl!}
-                alt={item.product_name}
-                className="w-full h-full object-contain"
-                referrerPolicy="no-referrer"
-                onError={() => setThumbError(true)}
+          {showImageSlot &&
+            (hasImage ? (
+              <button
+                type="button"
+                className={clsx(
+                  "w-11 h-11 rounded-lg border border-border-light dark:border-border-dark flex-shrink-0 flex items-center justify-center overflow-hidden bg-white",
+                  item.checked && "opacity-50 grayscale"
+                )}
+                onClick={handleImageAreaClick}
+                aria-label="View image"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={itemImageUrl!}
+                  alt={item.product_name}
+                  className="w-full h-full object-contain"
+                  referrerPolicy="no-referrer"
+                  onError={() => setThumbError(true)}
+                />
+              </button>
+            ) : (
+              <div
+                className="w-11 h-11 flex-shrink-0 rounded-lg border border-transparent"
+                aria-hidden
               />
-            </>
-          ) : (
-            <Icon name="image" size={20} className="text-gray-400 dark:text-gray-500" />
-          )}
-        </button>
+            ))}
         </div>
       </div>
 

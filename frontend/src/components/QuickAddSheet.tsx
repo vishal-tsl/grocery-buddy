@@ -21,6 +21,7 @@ export function QuickAddSheet({
 }: QuickAddSheetProps) {
   const [inputText, setInputText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [parsedItems, setParsedItems] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -45,6 +46,7 @@ export function QuickAddSheet({
   const handleSubmit = async () => {
     if (!inputText.trim() || isProcessing) return;
 
+    setSubmitError(null);
     setIsProcessing(true);
     try {
       const response = await parseGroceryList(inputText);
@@ -65,6 +67,7 @@ export function QuickAddSheet({
         match_source: item.match_source,
         match_reason: item.match_reason,
         confidence: item.confidence,
+        confidence_tier: item.confidence_tier ?? undefined,
         selected_option_index: item.selected_option_index,
         selected_suggestion_index: item.selected_suggestion_index,
         total_suggestions: item.total_suggestions,
@@ -77,21 +80,9 @@ export function QuickAddSheet({
       onClose();
     } catch (error) {
       console.error("Failed to parse items:", error);
-      // Fallback: add items as-is
-      const fallbackItems: GroceryItem[] = parsedItems.map((text, idx) => ({
-        id: `new-${Date.now()}-${idx}`,
-        product_name: text,
-        sku: null,
-        quantity: null,
-        unit: null,
-        notes: "",
-        checked: false,
-        match_source: "ai_text",
-      }));
-      onAddItems(fallbackItems, inputText.trim());
-      setInputText("");
-      setParsedItems([]);
-      onClose();
+      setSubmitError(
+        error instanceof Error ? error.message : "Failed to parse grocery list."
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -138,6 +129,11 @@ export function QuickAddSheet({
 
             {/* Input Area */}
             <div className="px-6 pb-4">
+              {submitError && (
+                <div className="mb-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-200">
+                  {submitError}
+                </div>
+              )}
               <div className="relative">
                 <textarea
                   ref={textareaRef}

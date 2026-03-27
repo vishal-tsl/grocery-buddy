@@ -5,6 +5,7 @@ from app.api.image_proxy import router as image_router
 from app.api.admin import router as admin_router
 from app.api.agents import router as agents_router
 from app.api.feedback import router as feedback_router
+from app.api.files import router as files_router
 from app.config import get_settings
 
 
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router, prefix="/api/v1", tags=["admin"])
     app.include_router(agents_router, prefix="/api/v1/agents", tags=["agents"])
     app.include_router(feedback_router, prefix="/api/v1", tags=["feedback"])
+    app.include_router(files_router, prefix="/api/v1", tags=["files"])
     
     # Health check endpoint
     @app.get("/health", tags=["health"])

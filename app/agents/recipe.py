@@ -116,10 +116,16 @@ class RecipeAgent:
         self.client = genai.Client(api_key=settings.gemini_api_key)
         self.model_id = "gemini-2.0-flash"
         self.http_client = httpx.AsyncClient(
-            timeout=15.0,
+            timeout=20.0,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            follow_redirects=True,
         )
     
     def extract_from_name(self, recipe_name: str) -> dict:
@@ -154,10 +160,19 @@ Return ONLY the JSON object, no other text."""
                 response_text = "\n".join(lines[1:-1])
             
             data = json.loads(response_text)
+            ingredients = data.get("ingredients") or []
+            if not ingredients:
+                return {
+                    "recipe_name": data.get("recipe_name", recipe_name),
+                    "servings": data.get("servings"),
+                    "ingredients": [],
+                    "source": "generated",
+                    "error": "No ingredients generated for this recipe name.",
+                }
             return {
                 "recipe_name": data.get("recipe_name", recipe_name),
                 "servings": data.get("servings"),
-                "ingredients": data.get("ingredients", []),
+                "ingredients": ingredients,
                 "source": "generated"
             }
             
@@ -188,14 +203,16 @@ Return ONLY the JSON object, no other text."""
             
             # Try to extract structured data first (JSON-LD)
             structured_data = self._extract_json_ld(html_content)
-            if structured_data and structured_data.get("ingredients"):
-                return {
-                    "recipe_name": structured_data.get("name", "Recipe"),
-                    "servings": structured_data.get("servings"),
-                    "source_url": url,
-                    "ingredients": structured_data["ingredients"],
-                    "source": "structured_data"
-                }
+            if structured_data:
+                ings = structured_data.get("ingredients") or []
+                if isinstance(ings, list) and len(ings) > 0:
+                    return {
+                        "recipe_name": structured_data.get("name", "Recipe"),
+                        "servings": structured_data.get("servings"),
+                        "source_url": url,
+                        "ingredients": ings,
+                        "source": "structured_data"
+                    }
             
             # Fall back to LLM extraction
             # Truncate HTML to avoid token limits
@@ -224,11 +241,21 @@ Return ONLY the JSON object, no other text."""
                 response_text = "\n".join(lines[1:-1])
             
             data = json.loads(response_text)
+            ingredients = data.get("ingredients") or []
+            if not ingredients:
+                return {
+                    "recipe_name": data.get("recipe_name", "Recipe"),
+                    "servings": data.get("servings"),
+                    "source_url": url,
+                    "ingredients": [],
+                    "source": "extracted",
+                    "error": "No ingredients found in page content (empty extract).",
+                }
             return {
                 "recipe_name": data.get("recipe_name", "Recipe"),
                 "servings": data.get("servings"),
                 "source_url": url,
-                "ingredients": data.get("ingredients", []),
+                "ingredients": ingredients,
                 "source": "extracted"
             }
             

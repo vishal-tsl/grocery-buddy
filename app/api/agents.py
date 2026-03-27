@@ -125,8 +125,14 @@ async def agent_resolve(http_request: Request, request: AgentResolveRequest) -> 
         return AgentResolveResponse(items=[])
 
     try:
+        items = list(request.items)
+        if request.prompt_context and request.prompt_context.strip():
+            ctx = request.prompt_context.strip()
+            items = [
+                i.model_copy(update={"prompt_context": i.prompt_context or ctx}) for i in items
+            ]
         resolver = get_resolver()
-        structured_items = await resolver.resolve_batch(request.items)
+        structured_items = await resolver.resolve_batch(items)
         
         response = AgentResolveResponse(items=structured_items)
         try:

@@ -52,13 +52,34 @@ export function WholeFeedbackBanner({
   return (
     <div className="mx-4 mb-3 px-4 py-3 rounded-xl bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark shadow-soft">
       <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">
-        How did we do?
+        How did we do overall?
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1">
           <button
             type="button"
-            onClick={() => setPositive(true)}
+            onClick={async () => {
+              if (isSubmitting || submitted) return;
+              setPositive(true);
+              setIsSubmitting(true);
+              try {
+                await submitFeedback({
+                  type: "batch",
+                  positive: true,
+                  comment: comment.trim() || undefined,
+                  raw_input: rawInput,
+                  item_count: itemCount,
+                });
+                setSubmitted(true);
+                setTimeout(onDismiss, 800);
+              } catch (err) {
+                console.error("Feedback submit failed:", err);
+                setPositive(null);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={isSubmitting || submitted}
             className={clsx(
               "p-2 rounded-lg transition",
               positive === true

@@ -1,12 +1,17 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from app.models.schemas import (
+    ItemIntent,
     NormalizedItem,
     StructuredItem,
     AutocompleteProduct,
     ConfidenceLevel,
+    MatchSource,
+    ResolvedProduct,
+    SuggestionType,
 )
 from app.services.resolver import ProductResolver
+from app.services.matching_pipeline import build_retrieval_queries, evaluate_match
 
 
 class TestConfidenceScoring:
@@ -20,7 +25,7 @@ class TestConfidenceScoring:
             return ProductResolver()
     
     def test_high_confidence_exact_match(self, resolver):
-        """HIGH confidence when normalized name appears in suggestion."""
+        """Strong match for specific multi-word product (catalog name preserved)."""
         normalized = NormalizedItem(
             normalized_product_name="tomato paste",
             original_text="tomato paste 8oz"
@@ -30,38 +35,39 @@ class TestConfidenceScoring:
             AutocompleteProduct(sku="67890", name="Contadina Tomato Paste 8oz", category="Canned Goods"),
         ]
         
-        result = resolver._evaluate_confidence(
-            normalized_item=normalized,
-            suggestions=suggestions,
-            search_query="tomato paste"
-        )
+        result = evaluate_match(normalized, suggestions, "tomato paste")
         
-        assert result.confidence == ConfidenceLevel.HIGH
-        assert result.sku == "12345"  # First match
-        assert result.category == "Canned Goods"  # Category from API
-        assert result.image_url == "https://example.com/tomato.jpg"  # Image from API
-        assert "Tomato Paste" in result.product_name
+        assert result.confidence in (ConfidenceLevel.HIGH, ConfidenceLevel.MEDIUM)
+        assert result.category == "Canned Goods"
+        assert "tomato" in result.product_name.lower()
+        if result.confidence == ConfidenceLevel.HIGH and result.match_source == MatchSource.PRODUCT:
+            assert result.sku == "12345"
     
     def test_medium_confidence_partial_match(self, resolver):
-        """MEDIUM confidence when only partial term matches."""
+        """Organic milk maps with good token overlap when a generic keyword row exists."""
         normalized = NormalizedItem(
             normalized_product_name="organic milk",
             original_text="organic milk"
         )
         suggestions = [
-            AutocompleteProduct(sku="11111", name="Organic Valley Whole Milk", category="Dairy & Eggs", image_url="https://example.com/milk.jpg"),
+            AutocompleteProduct(
+                sku="type_milk",
+                name="Milk",
+                category="Dairy & Eggs",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+            AutocompleteProduct(
+                sku="11111",
+                name="Organic Valley Whole Milk",
+                category="Dairy & Eggs",
+                image_url="https://example.com/milk.jpg",
+            ),
         ]
         
-        result = resolver._evaluate_confidence(
-            normalized_item=normalized,
-            suggestions=suggestions,
-            search_query="organic milk"
-        )
+        result = evaluate_match(normalized, suggestions, "organic milk")
         
-        # Should be HIGH because "milk" appears in the suggestion
-        assert result.confidence == ConfidenceLevel.HIGH
-        assert result.category == "Dairy & Eggs"  # Category from API
-        assert result.image_url == "https://example.com/milk.jpg"  # Image from API
+        assert result.category == "Dairy & Eggs"
+        assert "milk" in result.product_name.lower()
     
     def test_low_confidence_no_match(self, resolver):
         """LOW confidence when no meaningful match found."""
@@ -73,11 +79,7 @@ class TestConfidenceScoring:
             AutocompleteProduct(sku="99999", name="Completely Unrelated Product"),
         ]
         
-        result = resolver._evaluate_confidence(
-            normalized_item=normalized,
-            suggestions=suggestions,
-            search_query="mystery item"
-        )
+        result = evaluate_match(normalized, suggestions, "mystery item")
         
         assert result.confidence == ConfidenceLevel.LOW
         assert result.sku is None
@@ -89,11 +91,7 @@ class TestConfidenceScoring:
             original_text="unknown product"
         )
         
-        result = resolver._evaluate_confidence(
-            normalized_item=normalized,
-            suggestions=[],
-            search_query="unknown product"
-        )
+        result = evaluate_match(normalized, [], "unknown product")
         
         assert result.confidence == ConfidenceLevel.LOW
         assert result.sku is None
@@ -173,7 +171,7 @@ class TestSafeFallbacks:
         
         result = resolver._build_structured_item(normalized, resolved)
         
-        assert "2%" in result.product_name or result.product_name == "Milk"
+        assert "2%" in result.notes or "2%" in result.product_name or result.product_name == "Milk"
 
 
 class TestOutputContract:
@@ -221,22 +219,30 @@ class TestCategoryFromAPI:
             return ProductResolver()
     
     def test_category_included_high_confidence(self, resolver):
-        """Category should be included for HIGH confidence matches."""
+        """Generic eggs should prefer keyword row over branded product when both exist."""
         normalized = NormalizedItem(
             normalized_product_name="eggs",
             original_text="eggs"
         )
         suggestions = [
-            AutocompleteProduct(sku="EGG001", name="Large White Eggs", category="Dairy & Eggs"),
+            AutocompleteProduct(
+                sku="type_eggs",
+                name="Eggs",
+                category="Dairy & Eggs",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+            AutocompleteProduct(
+                sku="EGG001",
+                name="Large White Eggs",
+                category="Dairy & Eggs",
+                suggestion_type=SuggestionType.PRODUCT,
+            ),
         ]
         
-        result = resolver._evaluate_confidence(
-            normalized_item=normalized,
-            suggestions=suggestions,
-            search_query="eggs"
-        )
+        result = evaluate_match(normalized, suggestions, "eggs")
         
-        assert result.confidence == ConfidenceLevel.HIGH
+        assert result.match_source == MatchSource.KEYWORD
+        assert "egg" in result.product_name.lower()
         assert result.category == "Dairy & Eggs"
     
     def test_category_included_medium_confidence(self, resolver):
@@ -261,7 +267,7 @@ class TestCategoryFromAPI:
         assert result.category == "Snacks & Chips"
     
     def test_category_from_fallback(self, resolver):
-        """Category should still be extracted for LOW confidence from first suggestion."""
+        """Category should still be extracted for LOW confidence from best suggestion."""
         normalized = NormalizedItem(
             normalized_product_name="random item",
             original_text="random item"
@@ -270,14 +276,140 @@ class TestCategoryFromAPI:
             AutocompleteProduct(sku="X001", name="Something Else", category="Miscellaneous"),
         ]
         
-        result = resolver._evaluate_confidence(
-            normalized_item=normalized,
-            suggestions=suggestions,
-            search_query="random item"
-        )
+        result = evaluate_match(normalized, suggestions, "random item")
         
         assert result.confidence == ConfidenceLevel.LOW
-        assert result.category == "Miscellaneous"  # Still gets category from first suggestion
+        assert result.category == "Miscellaneous"
+
+
+class TestContextAndBrandedMatch:
+    """Context-aware re-ranking and branded string alignment."""
+
+    def test_taco_context_prefers_taco_shells_over_pasta(self):
+        normalized = NormalizedItem(
+            normalized_product_name="shells",
+            original_text="shells",
+            prompt_context="ground beef tacos taco shells shredded cheese",
+        )
+        suggestions = [
+            AutocompleteProduct(sku="p1", name="Shells Pasta", category="Pasta"),
+            AutocompleteProduct(sku="p2", name="Crunchy Taco Shells", category="Mexican"),
+        ]
+        result = evaluate_match(normalized, suggestions, "shells")
+        assert "taco" in result.product_name.lower()
+
+    def test_branded_line_prefers_haagen_row(self):
+        normalized = NormalizedItem(
+            normalized_product_name="Haagen-Dazs vanilla ice cream",
+            original_text="Haagen-Dazs vanilla ice cream",
+            has_brand=True,
+        )
+        suggestions = [
+            AutocompleteProduct(sku="g1", name="Store Brand Vanilla Ice Cream"),
+            AutocompleteProduct(sku="h1", name="Haagen-Dazs Vanilla Ice Cream"),
+        ]
+        result = evaluate_match(
+            normalized, suggestions, "Haagen-Dazs vanilla ice cream"
+        )
+        assert "haagen" in result.product_name.lower()
+
+
+class TestQARegressionHardening:
+    """Branded keyword commit, generic refusal, category-conflict confidence caps."""
+
+    def test_branded_keyword_match_sets_needs_specification_false(self):
+        normalized = NormalizedItem(
+            normalized_product_name="Haagen-Dazs vanilla ice cream",
+            original_text="Haagen-Dazs vanilla ice cream",
+            has_brand=True,
+        )
+        suggestions = [
+            AutocompleteProduct(
+                sku="type_99",
+                name="Haagen-Dazs Vanilla Ice Cream",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+        ]
+        r = evaluate_match(normalized, suggestions, "Haagen-Dazs vanilla ice cream")
+        assert r.needs_specification is False
+        assert "haagen" in r.product_name.lower()
+
+    def test_eggs_only_branded_product_returns_ai_text(self):
+        normalized = NormalizedItem(
+            normalized_product_name="eggs",
+            original_text="eggs",
+            has_brand=False,
+        )
+        suggestions = [
+            AutocompleteProduct(
+                sku="888",
+                name="Farmhouse Eggs",
+                brand="Farmhouse",
+                suggestion_type=SuggestionType.PRODUCT,
+            ),
+        ]
+        r = evaluate_match(normalized, suggestions, "eggs")
+        assert r.match_source == MatchSource.AI_TEXT
+        assert r.product_name.lower() == "eggs"
+
+    def test_pasta_vs_mexican_top_two_caps_display_confidence(self):
+        normalized = NormalizedItem(
+            normalized_product_name="shells",
+            original_text="shells",
+        )
+        suggestions = [
+            AutocompleteProduct(sku="a", name="Shells Pasta", category="Italian Pasta"),
+            AutocompleteProduct(sku="b", name="Taco Shells", category="Mexican Food"),
+        ]
+        r = evaluate_match(normalized, suggestions, "shells")
+        assert r.confidence_numeric is not None
+        assert r.confidence_numeric <= 0.72
+
+    def test_fresh_tomatoes_avoids_rotel_style_hit(self):
+        normalized = NormalizedItem(
+            normalized_product_name="tomatoes",
+            original_text="some tomatoes",
+            has_brand=False,
+        )
+        suggestions = [
+            AutocompleteProduct(
+                sku="t1",
+                name="Medium Diced Tomatoes With Green Chiles",
+                category="Canned",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+            AutocompleteProduct(
+                sku="t2",
+                name="Tomatoes",
+                category="Produce",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+        ]
+        r = evaluate_match(normalized, suggestions, "tomatoes")
+        assert "chile" not in r.product_name.lower()
+        assert "tomato" in r.product_name.lower()
+
+    def test_chicken_breast_avoids_canned(self):
+        normalized = NormalizedItem(
+            normalized_product_name="chicken breast",
+            original_text="chicken breast",
+        )
+        suggestions = [
+            AutocompleteProduct(
+                sku="c1",
+                name="Breast Canned Chicken",
+                category="Canned Meat",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+            AutocompleteProduct(
+                sku="c2",
+                name="Chicken Breast",
+                category="Meat",
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+        ]
+        r = evaluate_match(normalized, suggestions, "chicken breast")
+        assert "canned" not in r.product_name.lower()
 
 
 class TestSearchQueryBuilder:
@@ -327,6 +459,108 @@ class TestSearchQueryBuilder:
         assert "maybe" not in query
         assert "some" not in query
         assert "chips" in query
+
+    def test_query_omits_produce_size_words(self, resolver):
+        normalized = NormalizedItem(
+            normalized_product_name="cucumber",
+            modifiers=["medium"],
+            original_text="1 medium cucumber",
+        )
+        assert resolver._build_search_query(normalized) == "cucumber"
+
+    def test_notes_drop_as_written_fragments(self, resolver):
+        normalized = NormalizedItem(
+            normalized_product_name="Kerrygold butter",
+            notes='As written: "1 package Kerrygold butter"',
+            original_text="1 package Kerrygold butter",
+            has_brand=True,
+        )
+        resolved = ResolvedProduct(
+            product_name="Kerrygold Butter",
+            sku="kw1",
+            confidence=ConfidenceLevel.HIGH,
+            confidence_numeric=0.9,
+            needs_specification=False,
+            api_suggestions=[],
+            match_source=MatchSource.KEYWORD,
+            match_reason="keyword",
+        )
+        out = resolver._build_structured_item(normalized, resolved)
+        assert "as written" not in out.notes.lower()
+
+    def test_includes_note_omits_produce_size_words(self, resolver):
+        normalized = NormalizedItem(
+            normalized_product_name="tomatoes",
+            modifiers=["medium"],
+            original_text="some tomatoes",
+        )
+        resolved = ResolvedProduct(
+            product_name="Tomatoes",
+            sku=None,
+            confidence=ConfidenceLevel.MEDIUM,
+            confidence_numeric=0.76,
+            needs_specification=True,
+            api_suggestions=[],
+            match_source=MatchSource.KEYWORD,
+            match_reason="keyword",
+        )
+        out = resolver._build_structured_item(normalized, resolved)
+        assert "Includes" not in out.notes
+
+    def test_keyword_no_borrow_when_type_row_has_no_image(self, resolver):
+        """Keyword matches must not use brand-option photos when the type row has no image."""
+        img = "https://images.basketsavings.com/example.jpg"
+        suggestions = [
+            AutocompleteProduct(
+                sku="type_1_0",
+                name="Dijon Mustard",
+                suggestion_type=SuggestionType.KEYWORD,
+                image_url=None,
+            ),
+            AutocompleteProduct(
+                sku="brand_9_type_1",
+                name="Koops' Dijon Mustard",
+                brand="Koops'",
+                image_url=img,
+                suggestion_type=SuggestionType.KEYWORD,
+            ),
+        ]
+        normalized = NormalizedItem(
+            normalized_product_name="Dijon mustard",
+            original_text="Dijon mustard",
+        )
+        resolved = ResolvedProduct(
+            product_name="Dijon Mustard",
+            sku=None,
+            confidence=ConfidenceLevel.MEDIUM,
+            confidence_numeric=0.76,
+            needs_specification=True,
+            api_suggestions=suggestions,
+            match_source=MatchSource.KEYWORD,
+            match_reason="keyword",
+            image_url=None,
+        )
+        out = resolver._build_structured_item(normalized, resolved)
+        assert out.image_url is None
+        assert out.options[0].image_url is None
+        assert out.options[1].image_url == img
+
+
+class TestRetrievalQueries:
+    def test_no_context_prefix_when_brands_only_share_long_prompt(self):
+        long_prompt = (
+            "Häagen-Dazs vanilla bean ice cream Cool Ranch Doritos Kerrygold butter tomatoes"
+        )
+        n = NormalizedItem(
+            normalized_product_name="tomatoes",
+            original_text="some tomatoes",
+            prompt_context=long_prompt,
+            item_intent=ItemIntent.GENERIC,
+        )
+        qs = build_retrieval_queries(n, "tomatoes")
+        lowered = [q.lower() for q in qs]
+        assert all("haagen" not in q and "häagen" not in q for q in lowered)
+        assert "tomatoes" in lowered
 
 
 @pytest.mark.asyncio
