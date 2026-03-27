@@ -5,8 +5,8 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
     
-    # Gemini API
-    gemini_api_key: str
+    # Gemini API (empty until set on host — required for parse/normalize/recipe)
+    gemini_api_key: str = ""
     
     # Autocomplete API
     autocomplete_auth_token: str = "adc3d49185744f4389a2183e694060b9"

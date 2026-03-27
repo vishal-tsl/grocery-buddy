@@ -7,6 +7,7 @@ from app.models.schemas import (
 from app.services.resolver import get_resolver
 from app.services.list_coalesce import merge_duplicate_structured_items
 from app.services.tracking import capture_event
+from app.agents.gemini_util import gemini_api_key_configured
 from app.agents.parser import get_parser_agent
 from app.agents.normalizer import apply_normalizer_guardrails, get_normalizer_agent
 from app.agents.recipe import get_recipe_agent
@@ -17,6 +18,11 @@ router = APIRouter()
 
 def parse_and_normalize(text: str) -> list[NormalizedItem]:
     """Parse and normalize using the proper parser and normalizer agents."""
+    if not gemini_api_key_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="LLM is not configured. Set GEMINI_API_KEY in the server environment.",
+        )
     parser = get_parser_agent()
     normalizer = get_normalizer_agent()
     
@@ -58,6 +64,12 @@ async def parse_list(http_request: Request, request: ParseListRequest) -> ParseL
 
     if not raw_input.strip():
         return ParseListResponse(items=[])
+
+    if not gemini_api_key_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="LLM is not configured. Set GEMINI_API_KEY in the server environment (e.g. Render → Environment).",
+        )
 
     try:
         recipe_agent = get_recipe_agent()

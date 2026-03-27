@@ -1,7 +1,7 @@
 import json
 import re
-from google import genai
-from app.config import get_settings
+
+from app.agents.gemini_util import require_genai_client
 
 # Markdown-style checklist prefixes are metadata only — never exclude the line.
 _CHECKBOX_LINE = re.compile(r"^\s*\[[\sxX]\]\s*")
@@ -123,9 +123,14 @@ class ParserAgent:
     """Gemini-powered agent that splits raw grocery text into individual items."""
     
     def __init__(self):
-        settings = get_settings()
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = None
         self.model_id = "gemini-2.0-flash"
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = require_genai_client()
+        return self._client
     
     def parse(self, raw_text: str) -> list[str]:
         """

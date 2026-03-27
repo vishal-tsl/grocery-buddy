@@ -138,45 +138,68 @@ def test_admin_purge_accepts_valid_token(client, admin_password, admin_email):
 
 def test_parse_list_calls_capture_event_on_success(client):
     """POST /parse-list should call capture_event with input, output, status, latency."""
-    with patch("app.api.routes.parse_and_normalize") as mock_parse:
-        mock_parse.return_value = [
-            NormalizedItem(normalized_product_name="milk", original_text="milk"),
-        ]
-        with patch("app.api.routes.get_resolver") as mock_resolver:
-            resolver = MagicMock()
-            resolver.resolve_batch = AsyncMock(return_value=[
-                StructuredItem(product_name="Milk", sku=None, quantity=None, unit=None),
-            ])
-            mock_resolver.return_value = resolver
-            with patch("app.api.routes.capture_event", new_callable=AsyncMock) as mock_capture:
-                r = client.post(
-                    "/api/v1/parse-list",
-                    json={"text": "milk"},
-                    headers={"x-forwarded-for": "10.0.0.1", "user-agent": "test-agent"},
-                )
-                assert r.status_code == 200
-                mock_capture.assert_called_once()
-                call_kw = mock_capture.call_args[1]
-                assert call_kw["raw_input"] == "milk"
-                assert call_kw["status"] == "success"
-                assert len(call_kw["output_json"]) == 1
-                assert call_kw["output_json"][0]["product_name"] == "Milk"
-                assert "latency_ms" in str(call_kw)
+    recipe_agent = MagicMock()
+    recipe_agent.is_url = MagicMock(return_value=False)
+    parser = MagicMock()
+    parser.parse = MagicMock(return_value=["milk"])
+    normalizer = MagicMock()
+    normalizer.normalize_batch = MagicMock(
+        return_value=[NormalizedItem(normalized_product_name="milk", original_text="milk")]
+    )
+    with patch("app.api.routes.gemini_api_key_configured", return_value=True):
+        with patch("app.api.routes.get_recipe_agent", return_value=recipe_agent):
+            with patch("app.api.routes.get_parser_agent", return_value=parser):
+                with patch("app.api.routes.get_normalizer_agent", return_value=normalizer):
+                    with patch("app.api.routes.get_resolver") as mock_resolver:
+                        resolver = MagicMock()
+                        resolver.resolve_batch = AsyncMock(
+                            return_value=[
+                                StructuredItem(
+                                    product_name="Milk", sku=None, quantity=None, unit=None
+                                ),
+                            ]
+                        )
+                        mock_resolver.return_value = resolver
+                        with patch(
+                            "app.api.routes.capture_event", new_callable=AsyncMock
+                        ) as mock_capture:
+                            r = client.post(
+                                "/api/v1/parse-list",
+                                json={"text": "milk"},
+                                headers={
+                                    "x-forwarded-for": "10.0.0.1",
+                                    "user-agent": "test-agent",
+                                },
+                            )
+                            assert r.status_code == 200
+                            mock_capture.assert_called_once()
+                            call_kw = mock_capture.call_args[1]
+                            assert call_kw["raw_input"] == "milk"
+                            assert call_kw["status"] == "success"
+                            assert len(call_kw["output_json"]) == 1
+                            assert call_kw["output_json"][0]["product_name"] == "Milk"
+                            assert "latency_ms" in str(call_kw)
 
 
 def test_parse_list_calls_capture_event_on_error_path(client):
     """When parse/normalize fails, fallback path should still call capture_event with status=error."""
-    with patch("app.api.routes.parse_and_normalize", side_effect=Exception("LLM error")):
-        with patch("app.api.routes.capture_event", new_callable=AsyncMock) as mock_capture:
-            r = client.post(
-                "/api/v1/parse-list",
-                json={"text": "milk, eggs"},
-                headers={"x-forwarded-for": "10.0.0.2"},
-            )
-            assert r.status_code == 200
-            assert len(r.json()["items"]) == 2  # fallback split by comma
-            mock_capture.assert_called_once()
-            call_kw = mock_capture.call_args[1]
-            assert call_kw["raw_input"] == "milk, eggs"
-            assert call_kw["status"] == "error"
-            assert len(call_kw["output_json"]) == 2
+    recipe_agent = MagicMock()
+    recipe_agent.is_url = MagicMock(return_value=False)
+    parser = MagicMock()
+    parser.parse = MagicMock(side_effect=Exception("LLM error"))
+    with patch("app.api.routes.gemini_api_key_configured", return_value=True):
+        with patch("app.api.routes.get_recipe_agent", return_value=recipe_agent):
+            with patch("app.api.routes.get_parser_agent", return_value=parser):
+                with patch("app.api.routes.capture_event", new_callable=AsyncMock) as mock_capture:
+                    r = client.post(
+                        "/api/v1/parse-list",
+                        json={"text": "milk, eggs"},
+                        headers={"x-forwarded-for": "10.0.0.2"},
+                    )
+                    assert r.status_code == 200
+                    assert len(r.json()["items"]) == 2  # fallback split by comma
+                    mock_capture.assert_called_once()
+                    call_kw = mock_capture.call_args[1]
+                    assert call_kw["raw_input"] == "milk, eggs"
+                    assert call_kw["status"] == "error"
+                    assert len(call_kw["output_json"]) == 2

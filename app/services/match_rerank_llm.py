@@ -3,9 +3,7 @@
 import asyncio
 import json
 
-from google import genai
-
-from app.config import get_settings
+from app.agents.gemini_util import gemini_api_key_configured, require_genai_client
 from app.models.schemas import AutocompleteProduct, NormalizedItem, SuggestionType
 
 
@@ -33,8 +31,9 @@ async def pick_best_candidate_sku(
 ) -> str | None:
     if not candidates:
         return None
-    settings = get_settings()
-    client = genai.Client(api_key=settings.gemini_api_key)
+    if not gemini_api_key_configured():
+        return None
+    client = require_genai_client()
     lines = []
     for i, c in enumerate(candidates, start=1):
         typ = "keyword" if c.suggestion_type == SuggestionType.KEYWORD else "product"

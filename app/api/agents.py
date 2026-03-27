@@ -5,6 +5,7 @@ from app.models.schemas import (
     AgentNormalizeRequest, AgentNormalizeResponse,
     AgentResolveRequest, AgentResolveResponse
 )
+from app.agents.gemini_util import gemini_api_key_configured
 from app.agents.parser import get_parser_agent
 from app.agents.normalizer import get_normalizer_agent
 from app.services.resolver import get_resolver
@@ -25,6 +26,12 @@ async def agent_parse(http_request: Request, request: AgentParseRequest) -> Agen
 
     if not raw_input.strip():
         return AgentParseResponse(items=[])
+
+    if not gemini_api_key_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="LLM is not configured. Set GEMINI_API_KEY in the server environment.",
+        )
 
     try:
         parser = get_parser_agent()
@@ -74,6 +81,12 @@ async def agent_normalize(http_request: Request, request: AgentNormalizeRequest)
     
     if not request.items:
         return AgentNormalizeResponse(items=[])
+
+    if not gemini_api_key_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="LLM is not configured. Set GEMINI_API_KEY in the server environment.",
+        )
 
     try:
         normalizer = get_normalizer_agent()

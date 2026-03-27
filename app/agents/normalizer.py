@@ -1,7 +1,7 @@
 import json
 import re
-from google import genai
-from app.config import get_settings
+
+from app.agents.gemini_util import require_genai_client
 from app.models.schemas import ItemIntent, NormalizedItem
 
 _SIZE_MODIFIERS = frozenset({"small", "medium", "large", "xl", "jumbo"})
@@ -316,9 +316,14 @@ class NormalizerAgent:
     """Gemini-powered agent that extracts structured data from grocery items."""
     
     def __init__(self):
-        settings = get_settings()
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = None
         self.model_id = "gemini-2.0-flash"
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = require_genai_client()
+        return self._client
     
     def normalize(self, raw_item: str) -> NormalizedItem:
         """

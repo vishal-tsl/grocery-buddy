@@ -7,6 +7,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      # Required for /api/v1/parse-list and agent LLM routes (503 if unset; app still boots).
       - key: GEMINI_API_KEY
         sync: false
       - key: AUTOCOMPLETE_AUTH_TOKEN

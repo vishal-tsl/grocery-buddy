@@ -9,8 +9,8 @@ Supports:
 import json
 import re
 import httpx
-from google import genai
-from app.config import get_settings
+
+from app.agents.gemini_util import require_genai_client
 
 
 RECIPE_EXTRACTION_PROMPT = """You are a recipe ingredient extractor. Given a recipe name, generate an EXHAUSTIVE, realistic ingredient list.
@@ -112,8 +112,7 @@ class RecipeAgent:
     """Extracts ingredients from recipe names or URLs."""
     
     def __init__(self):
-        settings = get_settings()
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = None
         self.model_id = "gemini-2.0-flash"
         self.http_client = httpx.AsyncClient(
             timeout=20.0,
@@ -127,6 +126,12 @@ class RecipeAgent:
             },
             follow_redirects=True,
         )
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = require_genai_client()
+        return self._client
     
     def extract_from_name(self, recipe_name: str) -> dict:
         """
